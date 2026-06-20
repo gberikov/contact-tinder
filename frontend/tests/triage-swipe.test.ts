@@ -81,7 +81,7 @@ describe('triage store — swipe (US1)', () => {
     expect(store.summary?.remaining).toBe(1);
   });
 
-  it('undoes the last decision (keyboard ↓ / U) and reloads the deck', async () => {
+  it('undo returns the previous card to the front and steps back through history', async () => {
     vi.stubGlobal(
       'fetch',
       mockFetchSequence([
@@ -100,15 +100,45 @@ describe('triage store — swipe (US1)', () => {
         { status: 200, body: session(1) },
         { status: 204, body: null }, // undoDecision
         { status: 200, body: session(2) },
+      ]),
+    );
+    const store = useTriageStore();
+    await store.open('wc-1');
+    await store.decide('keep'); // decide Anna → current is Boris
+    expect(store.canUndo).toBe(true);
+    await store.undoLast(); // Anna comes straight back to the front
+    expect(store.currentCard?.contact.displayName).toBe('Anna');
+    expect(store.summary?.remaining).toBe(2);
+    expect(store.canUndo).toBe(false); // history exhausted
+  });
+
+  it('reset starts triage over: full deck, nothing decided, no undo history', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchSequence([
+        { status: 201, body: session(2) },
         { status: 200, body: deck },
+        {
+          status: 200,
+          body: {
+            id: 'd1',
+            sessionId: 's-1',
+            workingCopyContactId: 'c1',
+            outcome: 'keep',
+            decidedAt: 'now',
+          },
+        },
+        { status: 200, body: session(1) },
+        { status: 200, body: session(2) }, // resetTriageSession
+        { status: 200, body: deck }, // reloaded deck
       ]),
     );
     const store = useTriageStore();
     await store.open('wc-1');
     await store.decide('keep');
-    await store.undoLast();
-    expect(store.currentCard?.contact.displayName).toBe('Anna'); // back to the start
+    await store.reset();
+    expect(store.currentCard?.contact.displayName).toBe('Anna');
     expect(store.summary?.remaining).toBe(2);
-    expect(store.lastDecided).toBeNull();
+    expect(store.canUndo).toBe(false);
   });
 });

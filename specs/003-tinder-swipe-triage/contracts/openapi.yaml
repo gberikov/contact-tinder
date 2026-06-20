@@ -56,6 +56,17 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/TriageSession" } } }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /triage-sessions/{sessionId}/reset:
+    post:
+      summary: Start triage over — clear all decisions/processing and revert staged edits
+      operationId: resetTriageSession
+      parameters: [ { $ref: "#/components/parameters/SessionId" } ]
+      responses:
+        "200":
+          description: Session reset to its initial stage (committed Google deletions are not reversed)
+          content: { application/json: { schema: { $ref: "#/components/schemas/TriageSession" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /triage-sessions/{sessionId}/deck:
     get:
       summary: Get the next undecided cards in stable order (prefetch window)

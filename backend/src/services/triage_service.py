@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from src.core.errors import ConflictError, NotFoundError
-from src.models.triage import ProcessingItem, TriageDecision, TriageSession
+from src.models.triage import ProcessingItem, StagedEdit, TriageDecision, TriageSession
 from src.models.working_copy import WorkingCopy, WorkingCopyContact
 from src.services import audit_service, contact_fields, contact_flatten
 
@@ -259,6 +259,55 @@ def undo_decision(session: Session, session_id: uuid.UUID, contact_id: uuid.UUID
     session.flush()
     _refresh_completion(session, ts)
     session.commit()
+
+
+def reset_session(session: Session, session_id: uuid.UUID) -> TriageSession:
+    """Roll the session back to its initial stage — start triage over.
+
+    Clears all decisions and processing items for the session and reverts active staged edits
+    (transliterations/edits) on the working copy, restoring pristine contact payloads. Already
+    committed Google deletions are NOT reversed here (each delete batch has its own undo path).
+    """
+    ts = get_session(session, session_id)
+
+    # Revert content changes so cards return to their original state.
+    edits = session.scalars(
+        select(StagedEdit).where(
+            StagedEdit.working_copy_id == ts.working_copy_id, StagedEdit.status == "active"
+        )
+    )
+    reverted = 0
+    for edit in edits:
+        contact = session.get(WorkingCopyContact, edit.working_copy_contact_id)
+        if contact is not None:
+            contact.payload = dict(edit.payload_before)
+        edit.status = "undone"
+        edit.undone_at = _now()
+        reverted += 1
+
+    # Drop the triage classification (decisions) and the processing queue.
+    for item in session.scalars(
+        select(ProcessingItem).where(ProcessingItem.session_id == session_id)
+    ):
+        session.delete(item)
+    for decision in session.scalars(
+        select(TriageDecision).where(TriageDecision.session_id == session_id)
+    ):
+        session.delete(decision)
+
+    ts.status = "in_progress"
+    ts.finished_at = None
+    session.flush()
+    audit_service.record(
+        session,
+        action="triage.session.reset",
+        target_type="triage_session",
+        target_id=ts.id,
+        source_ref=ts.working_copy_id,
+        details={"reverted_edits": reverted},
+    )
+    session.commit()
+    return ts
 
 
 # ---- Summary / completion --------------------------------------------------------------------

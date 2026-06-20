@@ -308,6 +308,8 @@ export const api = {
   listTriageSessions: (workingCopyId: string) =>
     request<TriageSession[]>(`/working-copies/${workingCopyId}/triage-sessions`),
   getTriageSession: (sessionId: string) => request<TriageSession>(`/triage-sessions/${sessionId}`),
+  resetTriageSession: (sessionId: string) =>
+    request<TriageSession>(`/triage-sessions/${sessionId}/reset`, { method: 'POST' }),
   getDeck: (sessionId: string, cursor?: string, limit = 10) =>
     request<DeckPage>(
       `/triage-sessions/${sessionId}/deck?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,

@@ -7,7 +7,7 @@ import { storeToRefs } from 'pinia';
 import { onBeforeUnmount, onMounted } from 'vue';
 
 const store = useTriageStore();
-const { deck, summary, error } = storeToRefs(store);
+const { summary, error, canUndo } = storeToRefs(store);
 
 // Keyboard shortcuts: ←/D delete · →/K keep · ↑/P process · ↓/U undo last.
 function onKey(e: KeyboardEvent) {
@@ -36,6 +36,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 <template>
   <div class="deck">
+    <div class="topbar">
+      <button type="button" class="undo" :disabled="!canUndo" @click="store.undoLast()">
+        ↶ Undo
+      </button>
+    </div>
     <p v-if="error" class="error">{{ error }}</p>
     <template v-if="store.currentCard">
       <ContactCard :contact="store.currentCard.contact" />
@@ -56,6 +61,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 <style scoped>
 .deck { max-width: 420px; margin: 0 auto; }
+.topbar { display: flex; justify-content: flex-end; margin-bottom: 8px; min-height: 32px; }
+.undo { padding: 6px 12px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+.undo:disabled { opacity: 0.4; cursor: default; }
 .progress { text-align: center; color: #666; margin-top: 8px; }
 .error { color: #b00020; text-align: center; }
 .hints { text-align: center; color: #999; font-size: 13px; margin-top: 12px; }

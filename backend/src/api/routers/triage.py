@@ -178,6 +178,13 @@ def get_triage_session(
     return _session_out(session, triage_service.get_session(session, session_id))
 
 
+@router.post("/triage-sessions/{session_id}/reset", response_model=TriageSessionOut)
+def reset_triage_session(
+    session_id: uuid.UUID, session: Session = Depends(get_session)
+) -> TriageSessionOut:
+    return _session_out(session, triage_service.reset_session(session, session_id))
+
+
 @router.get("/triage-sessions/{session_id}/deck", response_model=DeckPageOut)
 def get_deck(
     session_id: uuid.UUID,
