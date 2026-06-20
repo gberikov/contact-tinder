@@ -29,7 +29,8 @@ services:
 
   worker:
     build: ./backend
-    # Combined loop: import jobs (feature 001) + delete batches (feature 003) — one container.
+    # Combined loop: import jobs (feature 001) + delete batches (feature 003) + label batches
+    # (feature 004 — the `Process` export label) — one container, no new service.
     command: python -m src.workers.run_all
     env_file: .env
     environment:

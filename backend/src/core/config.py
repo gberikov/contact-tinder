@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     # NOTE: like merge-undo, staged-edit and delete undo have NO timed expiry — they are reversible for
     # the life of the working copy (research D12). Do not add an expiry knob without an amendment.
 
+    # Export to Google (feature 004). The `Process` label is a Google CONTACT GROUP; ensuring/assigning
+    # it reuses the SAME `google_contacts_write_scope` above — NO new OAuth scope is added (research D1),
+    # and `account_has_write_scope` gates labeling too. Label undo also has NO timed expiry (research D8).
+    process_label_name: str = "Process"
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -252,3 +252,56 @@ class DeleteBatchOut(BaseModel):
     previewedAt: datetime | None = None
     committedAt: datetime | None = None
     undoneAt: datetime | None = None
+
+
+# ---- Export to Google (feature 004) -------------------------------------------------------
+
+class ExportContactSummaryOut(BaseModel):
+    """Redacted display summary of a set member (mirrors openapi.yaml ContactSummary)."""
+
+    workingCopyContactId: uuid.UUID
+    displayName: str | None = None
+    primaryEmail: str | None = None
+    primaryPhone: str | None = None
+    organization: str | None = None
+
+
+class StartExportBody(BaseModel):
+    sessionId: uuid.UUID | None = None
+
+
+class ExportPreviewOut(BaseModel):
+    workingCopyId: uuid.UUID
+    sessionId: uuid.UUID | None = None
+    deleteCount: int
+    labelCount: int
+    undecidedCount: int
+    nothingToExport: bool
+    labelName: str
+    deleteSet: list[ExportContactSummaryOut] = []
+    labelSet: list[ExportContactSummaryOut] = []
+
+
+class ExportReportOut(BaseModel):
+    deleted: int
+    skippedAbsentDelete: int
+    labeled: int
+    skippedAbsentLabel: int
+    failed: int
+    excluded: int
+    deleteStatus: str | None = None
+    labelStatus: str | None = None
+
+
+class ExportRunOut(BaseModel):
+    id: uuid.UUID
+    workingCopyId: uuid.UUID
+    accountId: uuid.UUID
+    sessionId: uuid.UUID | None = None
+    deleteBatchId: uuid.UUID | None = None
+    labelBatchId: uuid.UUID | None = None
+    status: str
+    undecidedCount: int
+    createdAt: datetime
+    completedAt: datetime | None = None
+    report: ExportReportOut
