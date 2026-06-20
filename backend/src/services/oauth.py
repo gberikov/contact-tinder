@@ -90,5 +90,19 @@ class GoogleOAuthProvider:
             refresh_token=creds.refresh_token,
             access_token=creds.token,
             expiry=creds.expiry,
-            scopes=list(creds.scopes or get_settings().google_scopes),
+            scopes=self._granted_scopes(flow, creds),
         )
+
+    @staticmethod
+    def _granted_scopes(flow, creds) -> list[str]:  # pragma: no cover - needs google env
+        """The scopes Google ACTUALLY granted — from the token response, not the requested set.
+
+        The token response's `scope` reflects what the user approved (incl. an incremental grant
+        like the contacts write scope). `creds.scopes` only mirrors the scopes the flow was built
+        with, so reading it would silently drop a newly-granted write scope.
+        """
+        token = getattr(flow.oauth2session, "token", None) or {}
+        granted = token.get("scope") or getattr(creds, "scopes", None)
+        if isinstance(granted, str):
+            granted = granted.split()
+        return list(granted) if granted else list(get_settings().google_scopes)
