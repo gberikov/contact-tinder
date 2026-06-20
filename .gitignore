@@ -46,6 +46,9 @@ logs/
 # =============================================================================
 models/
 zingg/models/
+# ...but the backend SOURCE package is not a trained-model artifact — always track it.
+!backend/src/models/
+!backend/src/models/**
 spark-warehouse/
 metastore_db/
 derby.log

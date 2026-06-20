@@ -116,6 +116,107 @@ export interface MergeResult {
   retiredContactIds: string[];
 }
 
+// ---- Swipe triage (feature 003) -----------------------------------------------------------
+
+export type Outcome = 'keep' | 'delete' | 'process';
+
+export interface SessionSummary {
+  total: number;
+  decided: number;
+  keep: number;
+  delete: number;
+  processing: number;
+  remaining: number;
+}
+
+export interface TriageSession {
+  id: string;
+  workingCopyId: string;
+  dedupRunId?: string | null;
+  status: 'in_progress' | 'complete';
+  createdAt: string;
+  finishedAt?: string | null;
+  summary: SessionSummary;
+}
+
+export interface ContactDetail {
+  displayName?: string | null;
+  primaryEmail?: string | null;
+  primaryPhone?: string | null;
+  organization?: string | null;
+  status: 'active' | 'retired';
+  payload: Record<string, unknown>;
+}
+
+export interface DeckCard {
+  workingCopyContactId: string;
+  contact: ContactDetail;
+  currentOutcome?: Outcome | null;
+}
+
+export interface DeckPage {
+  cards: DeckCard[];
+  nextCursor?: string | null;
+}
+
+export interface TriageDecision {
+  id: string;
+  sessionId: string;
+  workingCopyContactId: string;
+  outcome: Outcome;
+  decidedAt: string;
+  processingItemId?: string | null;
+}
+
+export interface TransliterationSuggestion {
+  hasSuggestion: boolean;
+  fields: Record<string, string>;
+}
+
+export interface ProcessingItem {
+  id: string;
+  sessionId: string;
+  workingCopyContactId: string;
+  wantsEdit: boolean;
+  wantsTransliterate: boolean;
+  status: 'pending' | 'done';
+  contact: ContactDetail;
+  transliterationSuggestion?: TransliterationSuggestion | null;
+}
+
+export interface StagedEdit {
+  id: string;
+  workingCopyContactId: string;
+  kind: 'edit' | 'transliterate';
+  status: 'active' | 'undone';
+  createdAt: string;
+  undoneAt?: string | null;
+}
+
+export interface DeleteBatch {
+  id: string;
+  workingCopyId: string;
+  sessionId?: string | null;
+  accountId: string;
+  status: 'staged' | 'previewed' | 'committing' | 'committed' | 'failed' | 'undoing' | 'undone';
+  totalCount: number;
+  deletedCount: number;
+  failedCount: number;
+  lastError?: string | null;
+  createdAt: string;
+  previewedAt?: string | null;
+  committedAt?: string | null;
+  undoneAt?: string | null;
+}
+
+export interface DeletionRecord {
+  id: string;
+  workingCopyContactId?: string | null;
+  status: 'pending' | 'deleted' | 'skipped_absent' | 'failed' | 'restored';
+  contact: ContactDetail;
+  error?: string | null;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -200,4 +301,63 @@ export const api = {
     request<Cluster>(`/clusters/${clusterId}/dismiss`, { method: 'POST' }),
   undoMerge: (mergeRecordId: string) =>
     request<Cluster>(`/merge-records/${mergeRecordId}/undo`, { method: 'POST' }),
+
+  // Swipe triage (feature 003)
+  openTriageSession: (workingCopyId: string) =>
+    request<TriageSession>(`/working-copies/${workingCopyId}/triage-sessions`, { method: 'POST' }),
+  listTriageSessions: (workingCopyId: string) =>
+    request<TriageSession[]>(`/working-copies/${workingCopyId}/triage-sessions`),
+  getTriageSession: (sessionId: string) => request<TriageSession>(`/triage-sessions/${sessionId}`),
+  resetTriageSession: (sessionId: string) =>
+    request<TriageSession>(`/triage-sessions/${sessionId}/reset`, { method: 'POST' }),
+  getDeck: (sessionId: string, cursor?: string, limit = 10) =>
+    request<DeckPage>(
+      `/triage-sessions/${sessionId}/deck?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`,
+    ),
+  setDecision: (
+    sessionId: string,
+    contactId: string,
+    body: { outcome: Outcome; wantsEdit?: boolean; wantsTransliterate?: boolean },
+  ) =>
+    request<TriageDecision>(`/triage-sessions/${sessionId}/decisions/${contactId}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  undoDecision: (sessionId: string, contactId: string) =>
+    request<void>(`/triage-sessions/${sessionId}/decisions/${contactId}`, { method: 'DELETE' }),
+
+  listProcessing: (sessionId: string, status: 'pending' | 'done' = 'pending') =>
+    request<ProcessingItem[]>(`/triage-sessions/${sessionId}/processing?status=${status}`),
+  getProcessingItem: (itemId: string) => request<ProcessingItem>(`/processing-items/${itemId}`),
+  completeProcessingItem: (itemId: string) =>
+    request<ProcessingItem>(`/processing-items/${itemId}/done`, { method: 'POST' }),
+  getTransliterationSuggestion: (contactId: string) =>
+    request<TransliterationSuggestion>(
+      `/working-copy-contacts/${contactId}/transliteration-suggestion`,
+    ),
+  applyEdit: (contactId: string, payload: Record<string, unknown>) =>
+    request<StagedEdit>(`/working-copy-contacts/${contactId}/edits`, {
+      method: 'PUT',
+      body: JSON.stringify({ payload }),
+    }),
+  acceptTransliteration: (contactId: string, fields: Record<string, string>) =>
+    request<StagedEdit>(`/working-copy-contacts/${contactId}/transliteration`, {
+      method: 'POST',
+      body: JSON.stringify({ fields }),
+    }),
+  undoStagedEdit: (editId: string) =>
+    request<StagedEdit>(`/staged-edits/${editId}/undo`, { method: 'POST' }),
+
+  createDeleteBatch: (workingCopyId: string, sessionId?: string) =>
+    request<DeleteBatch>(`/working-copies/${workingCopyId}/delete-batches`, {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    }),
+  getDeleteBatch: (batchId: string) => request<DeleteBatch>(`/delete-batches/${batchId}`),
+  previewDeleteBatch: (batchId: string) =>
+    request<DeletionRecord[]>(`/delete-batches/${batchId}/preview`),
+  confirmDeleteBatch: (batchId: string) =>
+    request<DeleteBatch>(`/delete-batches/${batchId}/confirm`, { method: 'POST' }),
+  undoDeleteBatch: (batchId: string) =>
+    request<DeleteBatch>(`/delete-batches/${batchId}/undo`, { method: 'POST' }),
 };

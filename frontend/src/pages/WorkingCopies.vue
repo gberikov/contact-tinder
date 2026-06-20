@@ -23,11 +23,15 @@ onMounted(async () => {
           <td><code>{{ c.snapshotId.slice(0, 8) }}</code></td>
           <td>{{ c.contactCount ?? '—' }}</td>
           <td><span class="status">{{ c.status }}</span></td>
-          <td>
+          <td class="actions">
             <RouterLink
               v-if="c.status === 'ready'"
               :to="`/working-copies/${c.id}/dedup`"
             >Deduplicate →</RouterLink>
+            <RouterLink
+              v-if="c.status === 'ready'"
+              :to="`/working-copies/${c.id}/triage`"
+            >Triage →</RouterLink>
           </td>
         </tr>
       </tbody>
@@ -35,3 +39,11 @@ onMounted(async () => {
     <p v-else>No working copies yet. Create one from a snapshot.</p>
   </section>
 </template>
+
+<style scoped>
+.actions {
+  display: flex;
+  gap: 1rem;
+  white-space: nowrap;
+}
+</style>

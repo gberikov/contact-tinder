@@ -29,7 +29,8 @@ services:
 
   worker:
     build: ./backend
-    command: python -m src.workers.import_worker
+    # Combined loop: import jobs (feature 001) + delete batches (feature 003) — one container.
+    command: python -m src.workers.run_all
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://app:app@db:5432/contacttinder

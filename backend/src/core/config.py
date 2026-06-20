@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     # NOTE: there is intentionally no merge-undo retention/expiry setting — merges are undoable for
     # the life of the working copy (research D6); undo is gated only by the MergeRecord existing.
 
+    # Swipe triage (feature 003). The real Google write path runs only behind the PeopleWriteClient
+    # seam; CI and the backend default to the Google-free fake write client.
+    people_write_client: str = "fake"  # fake | google
+    # Deleting contacts in Google requires the read-WRITE contacts scope. Google offers no delete-only
+    # scope, so this is the narrowest that works (research D8/D9). It is requested ONLY via incremental
+    # consent when the operator enables deletion — it is deliberately NOT in `google_scopes` above.
+    google_contacts_write_scope: str = "https://www.googleapis.com/auth/contacts"
+    # NOTE: like merge-undo, staged-edit and delete undo have NO timed expiry — they are reversible for
+    # the life of the working copy (research D12). Do not add an expiry knob without an amendment.
+
 
 @lru_cache
 def get_settings() -> Settings:

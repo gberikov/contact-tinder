@@ -135,3 +135,120 @@ class MergeResultOut(BaseModel):
     survivorContactId: uuid.UUID
     clusterId: uuid.UUID
     retiredContactIds: list[uuid.UUID]
+
+
+# ---- Swipe triage (feature 003) -----------------------------------------------------------
+
+class SessionSummaryOut(BaseModel):
+    total: int
+    decided: int
+    keep: int
+    delete: int
+    processing: int
+    remaining: int
+
+
+class TriageSessionOut(BaseModel):
+    id: uuid.UUID
+    workingCopyId: uuid.UUID
+    dedupRunId: uuid.UUID | None = None
+    status: str
+    createdAt: datetime
+    finishedAt: datetime | None = None
+    summary: SessionSummaryOut
+
+
+class ContactDetailOut(BaseModel):
+    displayName: str | None = None
+    primaryEmail: str | None = None
+    primaryPhone: str | None = None
+    organization: str | None = None
+    status: str
+    payload: dict
+
+
+class DeckCardOut(BaseModel):
+    workingCopyContactId: uuid.UUID
+    contact: ContactDetailOut
+    currentOutcome: str | None = None
+
+
+class DeckPageOut(BaseModel):
+    cards: list[DeckCardOut]
+    nextCursor: str | None = None
+
+
+class DecisionRequest(BaseModel):
+    outcome: str
+    wantsEdit: bool = False
+    wantsTransliterate: bool = False
+
+
+class TriageDecisionOut(BaseModel):
+    id: uuid.UUID
+    sessionId: uuid.UUID
+    workingCopyContactId: uuid.UUID
+    outcome: str
+    decidedAt: datetime
+    processingItemId: uuid.UUID | None = None
+
+
+class TransliterationSuggestionOut(BaseModel):
+    hasSuggestion: bool
+    fields: dict[str, str]
+
+
+class TransliterationAcceptRequest(BaseModel):
+    fields: dict[str, str]
+
+
+class EditRequest(BaseModel):
+    payload: dict
+
+
+class StagedEditOut(BaseModel):
+    id: uuid.UUID
+    workingCopyContactId: uuid.UUID
+    kind: str
+    status: str
+    createdAt: datetime
+    undoneAt: datetime | None = None
+
+
+class ProcessingItemOut(BaseModel):
+    id: uuid.UUID
+    sessionId: uuid.UUID
+    workingCopyContactId: uuid.UUID
+    wantsEdit: bool
+    wantsTransliterate: bool
+    status: str
+    contact: ContactDetailOut
+    transliterationSuggestion: TransliterationSuggestionOut | None = None
+
+
+class CreateDeleteBatchBody(BaseModel):
+    sessionId: uuid.UUID | None = None
+
+
+class DeletionRecordOut(BaseModel):
+    id: uuid.UUID
+    workingCopyContactId: uuid.UUID | None = None
+    status: str
+    contact: ContactDetailOut
+    error: str | None = None
+
+
+class DeleteBatchOut(BaseModel):
+    id: uuid.UUID
+    workingCopyId: uuid.UUID
+    sessionId: uuid.UUID | None = None
+    accountId: uuid.UUID
+    status: str
+    totalCount: int
+    deletedCount: int
+    failedCount: int
+    lastError: str | None = None
+    createdAt: datetime
+    previewedAt: datetime | None = None
+    committedAt: datetime | None = None
+    undoneAt: datetime | None = None

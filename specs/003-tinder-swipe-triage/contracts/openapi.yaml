@@ -1,0 +1,496 @@
+openapi: 3.1.0
+info:
+  title: Contact Tinder — Swipe Triage API
+  version: 0.1.0
+  description: >
+    Backend REST API for feature 003-tinder-swipe-triage. Operates over the post-dedup survivors
+    (active working_copy_contact rows) of a working copy (features 001/002). Swiping stages decisions
+    only — keep / delete / send-to-processing — and writes NOTHING to Google. Contacts sent to
+    processing are edited and/or transliterated (Latin→Cyrillic, name fields only) in a post-swipe
+    queue as reversible staged edits. Deletions accumulate into a DeleteBatch that, after a dry-run
+    preview and an explicit confirmation, is committed to Google via people.deleteContact by a
+    PG-backed worker; every deleted contact has a restorable snapshot persisted first, and deletes are
+    undoable. This is the only feature that writes to Google and it requires the contacts write scope.
+servers:
+  - url: /api
+
+paths:
+  /working-copies/{workingCopyId}/triage-sessions:
+    post:
+      summary: Open (or return the active) triage session for a working copy
+      operationId: openTriageSession
+      parameters: [ { $ref: "#/components/parameters/WorkingCopyId" } ]
+      responses:
+        "200":
+          description: Existing in-progress session returned
+          content: { application/json: { schema: { $ref: "#/components/schemas/TriageSession" } } }
+        "201":
+          description: New session opened
+          content: { application/json: { schema: { $ref: "#/components/schemas/TriageSession" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    get:
+      summary: List triage sessions for a working copy (most recent first)
+      operationId: listTriageSessions
+      parameters:
+        - $ref: "#/components/parameters/WorkingCopyId"
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [in_progress, complete] }
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/TriageSession" } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /triage-sessions/{sessionId}:
+    get:
+      summary: Get a session with progress + outcome summary
+      operationId: getTriageSession
+      parameters: [ { $ref: "#/components/parameters/SessionId" } ]
+      responses:
+        "200":
+          description: The session
+          content: { application/json: { schema: { $ref: "#/components/schemas/TriageSession" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /triage-sessions/{sessionId}/reset:
+    post:
+      summary: Start triage over — clear all decisions/processing and revert staged edits
+      operationId: resetTriageSession
+      parameters: [ { $ref: "#/components/parameters/SessionId" } ]
+      responses:
+        "200":
+          description: Session reset to its initial stage (committed Google deletions are not reversed)
+          content: { application/json: { schema: { $ref: "#/components/schemas/TriageSession" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /triage-sessions/{sessionId}/deck:
+    get:
+      summary: Get the next undecided cards in stable order (prefetch window)
+      operationId: getDeck
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: Opaque position from a previous page (omit for the start/resume point)
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        "200":
+          description: Cards to swipe (each carries the contact + any existing decision)
+          content: { application/json: { schema: { $ref: "#/components/schemas/DeckPage" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /triage-sessions/{sessionId}/decisions/{contactId}:
+    put:
+      summary: Record or re-decide a contact's outcome (latest wins; FR-006)
+      operationId: setDecision
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/ContactId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DecisionRequest" }
+      responses:
+        "200":
+          description: Decision recorded/updated (process outcome creates a pending ProcessingItem)
+          content: { application/json: { schema: { $ref: "#/components/schemas/TriageDecision" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Contact is not an active survivor of this working copy
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    delete:
+      summary: Undo a decision, returning the contact to undecided
+      operationId: undoDecision
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - $ref: "#/components/parameters/ContactId"
+      responses:
+        "204": { description: Decision cleared }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /triage-sessions/{sessionId}/processing:
+    get:
+      summary: List the post-swipe processing queue
+      operationId: listProcessing
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [pending, done], default: pending }
+      responses:
+        "200":
+          description: Processing items
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ProcessingItem" } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /processing-items/{itemId}:
+    get:
+      summary: Get one processing item with the contact and a transliteration suggestion
+      operationId: getProcessingItem
+      parameters: [ { $ref: "#/components/parameters/ItemId" } ]
+      responses:
+        "200":
+          description: Item detail (includes computed Cyrillic name suggestion if applicable)
+          content: { application/json: { schema: { $ref: "#/components/schemas/ProcessingItem" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /processing-items/{itemId}/done:
+    post:
+      summary: Mark processing complete; contact's terminal decision defaults to keep (D4)
+      operationId: completeProcessingItem
+      parameters: [ { $ref: "#/components/parameters/ItemId" } ]
+      responses:
+        "200":
+          description: Item done; the contact's decision is now keep (re-decidable)
+          content: { application/json: { schema: { $ref: "#/components/schemas/ProcessingItem" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /working-copy-contacts/{contactId}/transliteration-suggestion:
+    get:
+      summary: Compute a Latin→Cyrillic suggestion for the contact's name fields (no mutation; FR-014)
+      operationId: getTransliterationSuggestion
+      parameters: [ { $ref: "#/components/parameters/ContactId" } ]
+      responses:
+        "200":
+          description: Suggested Cyrillic name fields (empty/Cyrillic input ⇒ unchanged)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransliterationSuggestion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /working-copy-contacts/{contactId}/edits:
+    put:
+      summary: Apply a card edit, staged & reversible (FR-013/016)
+      operationId: applyEdit
+      parameters: [ { $ref: "#/components/parameters/ContactId" } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EditRequest" }
+      responses:
+        "200":
+          description: Edit staged
+          content: { application/json: { schema: { $ref: "#/components/schemas/StagedEdit" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /working-copy-contacts/{contactId}/transliteration:
+    post:
+      summary: Accept (optionally corrected) Cyrillic name, staged & reversible (FR-014/015)
+      operationId: acceptTransliteration
+      parameters: [ { $ref: "#/components/parameters/ContactId" } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransliterationAcceptRequest" }
+      responses:
+        "200":
+          description: Transliteration staged (name fields only)
+          content: { application/json: { schema: { $ref: "#/components/schemas/StagedEdit" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /staged-edits/{editId}/undo:
+    post:
+      summary: Undo a staged edit/transliteration, restoring the prior payload (SC-004)
+      operationId: undoStagedEdit
+      parameters:
+        - name: editId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Edit undone; contact payload restored
+          content: { application/json: { schema: { $ref: "#/components/schemas/StagedEdit" } } }
+        "409":
+          description: Edit already undone
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /working-copies/{workingCopyId}/delete-batches:
+    post:
+      summary: Build a delete batch from the current queued-for-deletion decisions (FR-018)
+      operationId: createDeleteBatch
+      parameters: [ { $ref: "#/components/parameters/WorkingCopyId" } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessionId: { type: string, format: uuid, nullable: true }
+      responses:
+        "201":
+          description: Batch staged (snapshots of payloads captured); review via preview next
+          content: { application/json: { schema: { $ref: "#/components/schemas/DeleteBatch" } } }
+        "409":
+          description: No contacts are queued for deletion
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /delete-batches/{batchId}:
+    get:
+      summary: Get a delete batch with progress/status
+      operationId: getDeleteBatch
+      parameters: [ { $ref: "#/components/parameters/BatchId" } ]
+      responses:
+        "200":
+          description: The batch
+          content: { application/json: { schema: { $ref: "#/components/schemas/DeleteBatch" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /delete-batches/{batchId}/preview:
+    get:
+      summary: Dry-run preview — exactly which contacts will be deleted (FR-019); no Google call
+      operationId: previewDeleteBatch
+      parameters: [ { $ref: "#/components/parameters/BatchId" } ]
+      responses:
+        "200":
+          description: The records that will be deleted (with display projections)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DeletionRecord" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /delete-batches/{batchId}/confirm:
+    post:
+      summary: Confirm the batch and enqueue deletion in Google (FR-021); requires write scope (D9)
+      operationId: confirmDeleteBatch
+      parameters: [ { $ref: "#/components/parameters/BatchId" } ]
+      responses:
+        "202":
+          description: Batch confirmed and enqueued (status committing)
+          content: { application/json: { schema: { $ref: "#/components/schemas/DeleteBatch" } } }
+        "403":
+          description: Account lacks the Google contacts write scope — re-consent required (D9)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: Batch not in a confirmable (staged/previewed) state
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /delete-batches/{batchId}/undo:
+    post:
+      summary: Undo a committed batch — re-create deleted contacts from their snapshots (FR-023)
+      operationId: undoDeleteBatch
+      parameters: [ { $ref: "#/components/parameters/BatchId" } ]
+      responses:
+        "202":
+          description: Undo enqueued; contacts will be re-created in Google
+          content: { application/json: { schema: { $ref: "#/components/schemas/DeleteBatch" } } }
+        "409":
+          description: Batch not in an undoable (committed) state
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  parameters:
+    WorkingCopyId: { name: workingCopyId, in: path, required: true, schema: { type: string, format: uuid } }
+    SessionId: { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+    ContactId: { name: contactId, in: path, required: true, schema: { type: string, format: uuid } }
+    ItemId: { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+    BatchId: { name: batchId, in: path, required: true, schema: { type: string, format: uuid } }
+
+  responses:
+    NotFound:
+      description: Resource not found (or not owned by the caller's working copy/account)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  schemas:
+    TriageSession:
+      type: object
+      required: [id, workingCopyId, status, createdAt, summary]
+      properties:
+        id: { type: string, format: uuid }
+        workingCopyId: { type: string, format: uuid }
+        dedupRunId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [in_progress, complete] }
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        summary: { $ref: "#/components/schemas/SessionSummary" }
+
+    SessionSummary:
+      type: object
+      required: [total, decided, keep, delete, processing, remaining]
+      properties:
+        total: { type: integer, description: active survivors in the deck }
+        decided: { type: integer }
+        keep: { type: integer }
+        delete: { type: integer }
+        processing: { type: integer, description: contacts still in the processing queue }
+        remaining: { type: integer, description: undecided contacts }
+
+    DeckPage:
+      type: object
+      required: [cards]
+      properties:
+        cards:
+          type: array
+          items: { $ref: "#/components/schemas/DeckCard" }
+        nextCursor: { type: string, nullable: true }
+
+    DeckCard:
+      type: object
+      required: [workingCopyContactId, contact]
+      properties:
+        workingCopyContactId: { type: string, format: uuid }
+        contact: { $ref: "#/components/schemas/ContactDetail" }
+        currentOutcome:
+          type: string
+          enum: [keep, delete, process]
+          nullable: true
+          description: Present if already decided (re-decide supported)
+
+    TriageDecision:
+      type: object
+      required: [id, sessionId, workingCopyContactId, outcome, decidedAt]
+      properties:
+        id: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        workingCopyContactId: { type: string, format: uuid }
+        outcome: { type: string, enum: [keep, delete, process] }
+        decidedAt: { type: string, format: date-time }
+        processingItemId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Set when outcome=process
+
+    DecisionRequest:
+      type: object
+      required: [outcome]
+      properties:
+        outcome: { type: string, enum: [keep, delete, process] }
+        wantsEdit:
+          type: boolean
+          default: false
+          description: For outcome=process — request the edit action in the queue
+        wantsTransliterate:
+          type: boolean
+          default: false
+          description: For outcome=process — request the transliterate action in the queue
+
+    ProcessingItem:
+      type: object
+      required: [id, sessionId, workingCopyContactId, status, contact]
+      properties:
+        id: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        workingCopyContactId: { type: string, format: uuid }
+        wantsEdit: { type: boolean }
+        wantsTransliterate: { type: boolean }
+        status: { type: string, enum: [pending, done] }
+        contact: { $ref: "#/components/schemas/ContactDetail" }
+        transliterationSuggestion:
+          oneOf:
+            - { $ref: "#/components/schemas/TransliterationSuggestion" }
+            - { type: "null" }
+
+    TransliterationSuggestion:
+      description: Suggested Cyrillic rendering of name fields only (given/family/display)
+      type: object
+      required: [hasSuggestion, fields]
+      properties:
+        hasSuggestion:
+          type: boolean
+          description: false when the name is empty or already Cyrillic (FR-017)
+        fields:
+          type: object
+          description: field name → suggested Cyrillic value
+          additionalProperties: { type: string }
+
+    TransliterationAcceptRequest:
+      type: object
+      required: [fields]
+      properties:
+        fields:
+          type: object
+          description: Final (possibly operator-corrected) Cyrillic name values to stage
+          additionalProperties: { type: string }
+
+    EditRequest:
+      type: object
+      required: [payload]
+      properties:
+        payload:
+          type: object
+          additionalProperties: true
+          description: Full edited Person payload to stage onto the working-copy contact
+
+    StagedEdit:
+      type: object
+      required: [id, workingCopyContactId, kind, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        workingCopyContactId: { type: string, format: uuid }
+        kind: { type: string, enum: [edit, transliterate] }
+        status: { type: string, enum: [active, undone] }
+        createdAt: { type: string, format: date-time }
+        undoneAt: { type: string, format: date-time, nullable: true }
+
+    DeleteBatch:
+      type: object
+      required: [id, workingCopyId, accountId, status, totalCount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        workingCopyId: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid, nullable: true }
+        accountId: { type: string, format: uuid }
+        status: { type: string, enum: [staged, previewed, committing, committed, failed, undone] }
+        totalCount: { type: integer }
+        deletedCount: { type: integer }
+        failedCount: { type: integer }
+        lastError: { type: string, nullable: true, description: "redacted; no secrets/PII" }
+        createdAt: { type: string, format: date-time }
+        previewedAt: { type: string, format: date-time, nullable: true }
+        committedAt: { type: string, format: date-time, nullable: true }
+        undoneAt: { type: string, format: date-time, nullable: true }
+
+    DeletionRecord:
+      type: object
+      required: [id, status, contact]
+      properties:
+        id: { type: string, format: uuid }
+        workingCopyContactId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [pending, deleted, skipped_absent, failed, restored] }
+        contact: { $ref: "#/components/schemas/ContactDetail" }
+        error: { type: string, nullable: true, description: "redacted on failure" }
+
+    ContactDetail:
+      description: Read-only display projection of a working-copy contact (full payload included for edit)
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string, nullable: true }
+        primaryEmail: { type: string, nullable: true }
+        primaryPhone: { type: string, nullable: true }
+        organization: { type: string, nullable: true }
+        status: { type: string, enum: [active, retired] }
+        payload:
+          type: object
+          additionalProperties: true
+          description: Full Person payload (for the edit form); never includes secrets
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
