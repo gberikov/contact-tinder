@@ -18,6 +18,11 @@ class AccountOut(BaseModel):
     createdAt: datetime
 
 
+class GrantWriteBody(BaseModel):
+    # Relative frontend path to return to after consent (e.g. the Export screen).
+    returnTo: str | None = None
+
+
 class SnapshotOut(BaseModel):
     id: uuid.UUID
     accountId: uuid.UUID

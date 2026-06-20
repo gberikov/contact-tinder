@@ -24,8 +24,14 @@ async function confirm() {
     await store.confirmDelete();
     await store.pollUntilDone();
   } catch {
-    /* 403 → re-consent surfaced via store.error */
+    /* 403 → store.needsWriteScope drives the re-consent button below */
   }
+}
+
+async function reauthorize() {
+  // One click → Google consent for the contacts write scope → back here to finish exporting.
+  const url = await store.requestWriteConsent(`/working-copies/${workingCopyId}/export`);
+  window.location.href = url;
 }
 </script>
 
@@ -66,9 +72,15 @@ async function confirm() {
             Confirm &amp; run export
           </button>
 
-          <p v-if="error" class="error">
-            {{ error }} — re-consent with the contacts write scope is required.
-          </p>
+          <div v-if="store.needsWriteScope" class="reauth">
+            <p class="error">
+              Google ещё не разрешил запись в контакты для этого аккаунта.
+            </p>
+            <button type="button" class="reauth-btn" @click="reauthorize">
+              Разрешить доступ Google и продолжить
+            </button>
+          </div>
+          <p v-else-if="error" class="error">{{ error }}</p>
 
           <ExportReport
             v-if="run.status !== 'previewing'"
@@ -90,4 +102,13 @@ async function confirm() {
 .actions, .run { margin-top: 16px; }
 .error { color: #b00020; }
 .hint { color: #555; font-size: 0.9em; }
+.reauth { margin-top: 12px; }
+.reauth-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #1a73e8;
+  color: #fff;
+  cursor: pointer;
+}
 </style>

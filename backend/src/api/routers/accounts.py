@@ -8,13 +8,31 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from src.api.deps import get_oauth_provider
-from src.api.schemas import AccountOut
+from src.api.schemas import AccountOut, GrantWriteBody
 from src.core.config import get_settings
 from src.core.db import get_session
 from src.services import account_service
 from src.services.oauth import OAuthProvider
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
+
+_DEFAULT_RETURN = "/accounts"
+
+
+def _encode_state(return_to: str | None = None) -> str:
+    """A random state token, optionally carrying a return-to path across the OAuth round-trip."""
+    token = uuid.uuid4().hex
+    return f"{token}|{return_to}" if return_to else token
+
+
+def _return_to_from_state(state: str) -> str:
+    """Extract the post-consent redirect path; only same-site relative paths (no open redirect)."""
+    if "|" not in state:
+        return _DEFAULT_RETURN
+    candidate = state.split("|", 1)[1]
+    if candidate.startswith("/") and not candidate.startswith("//"):
+        return candidate
+    return _DEFAULT_RETURN
 
 
 def _to_out(account) -> AccountOut:
@@ -36,8 +54,22 @@ def list_accounts(session: Session = Depends(get_session)) -> list[AccountOut]:
 def connect(
     provider: OAuthProvider = Depends(get_oauth_provider),
 ) -> dict[str, str]:
-    state = uuid.uuid4().hex
-    return {"authorizationUrl": provider.authorization_url(state)}
+    return {"authorizationUrl": provider.authorization_url(_encode_state())}
+
+
+@router.post("/grant-write")
+def grant_write(
+    body: GrantWriteBody | None = None,
+    provider: OAuthProvider = Depends(get_oauth_provider),
+) -> dict[str, str]:
+    """Incremental-consent: re-authorize the same account WITH the contacts write scope (FR-020).
+
+    The export's deletion/labeling needs the `…/auth/contacts` scope; this asks Google for it and,
+    once granted, returns the operator straight back to where they were (e.g. the Export screen).
+    """
+    body = body or GrantWriteBody()
+    state = _encode_state(body.returnTo)
+    return {"authorizationUrl": provider.authorization_url(state, write=True)}
 
 
 @router.get("/callback")
@@ -50,7 +82,9 @@ def callback(
     result = provider.exchange(code, state)
     account_service.store_connection(session, result)
     session.commit()
-    return RedirectResponse(url=f"{get_settings().frontend_url}/accounts", status_code=302)
+    return RedirectResponse(
+        url=f"{get_settings().frontend_url}{_return_to_from_state(state)}", status_code=302
+    )
 
 
 @router.delete("/{account_id}", status_code=204)

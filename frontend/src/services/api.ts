@@ -298,6 +298,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   listAccounts: () => request<Account[]>('/accounts'),
   connect: () => request<{ authorizationUrl: string }>('/accounts/connect', { method: 'POST' }),
+  // Incremental consent: re-authorize the connected account WITH the contacts write scope, then
+  // come back to `returnTo` (e.g. the Export screen). Used to clear a 403 write_scope_required.
+  grantWriteAccess: (returnTo?: string) =>
+    request<{ authorizationUrl: string }>('/accounts/grant-write', {
+      method: 'POST',
+      body: JSON.stringify({ returnTo }),
+    }),
   disconnect: (id: string) => request<void>(`/accounts/${id}`, { method: 'DELETE' }),
 
   createSnapshot: (accountId: string, label?: string) =>

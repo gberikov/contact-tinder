@@ -57,6 +57,22 @@ describe('export run + report (US3)', () => {
     await store.start('wc-1');
     await expect(store.confirmDelete()).rejects.toThrow();
     expect(store.error).toContain('scope');
+    expect(store.needsWriteScope).toBe(true);
+  });
+
+  it('builds a one-click re-consent URL that returns to the export screen', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchSequence([
+        {
+          status: 200,
+          body: { authorizationUrl: 'https://accounts.google.com/o/oauth2/auth?state=t|/x/export' },
+        },
+      ]),
+    );
+    const store = useExportStore();
+    const url = await store.requestWriteConsent('/working-copies/wc-1/export');
+    expect(url).toContain('accounts.google.com');
   });
 
   it('polls until the run reaches a terminal state', async () => {

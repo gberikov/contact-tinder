@@ -1,4 +1,4 @@
-import { type ExportPreview, type ExportRun, api } from '@/services/api';
+import { ApiError, type ExportPreview, type ExportRun, api } from '@/services/api';
 import { defineStore } from 'pinia';
 
 interface State {
@@ -7,6 +7,8 @@ interface State {
   loading: boolean;
   error: string | null;
   polling: boolean;
+  // Set when confirm-delete is refused for a missing write scope — surfaces the re-consent button.
+  needsWriteScope: boolean;
 }
 
 // Terminal run states — once reached, progress polling stops.
@@ -19,6 +21,7 @@ export const useExportStore = defineStore('export', {
     loading: false,
     error: null,
     polling: false,
+    needsWriteScope: false,
   }),
   getters: {
     nothingToExport: (s): boolean => s.preview?.nothingToExport ?? false,
@@ -50,12 +53,21 @@ export const useExportStore = defineStore('export', {
     async confirmDelete() {
       if (!this.run) return;
       this.error = null;
+      this.needsWriteScope = false;
       try {
         this.run = await api.confirmExportDelete(this.run.id);
       } catch (e) {
+        if (e instanceof ApiError && e.code === 'write_scope_required') {
+          this.needsWriteScope = true;
+        }
         this.error = (e as Error).message;
         throw e;
       }
+    },
+    /** One-click re-consent: returns the Google URL to redirect to; comes back to `returnTo`. */
+    async requestWriteConsent(returnTo: string): Promise<string> {
+      const { authorizationUrl } = await api.grantWriteAccess(returnTo);
+      return authorizationUrl;
     },
     async refresh() {
       if (!this.run) return;
