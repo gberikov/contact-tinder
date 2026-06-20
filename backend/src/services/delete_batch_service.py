@@ -7,12 +7,14 @@ injected PeopleWriteClient so CI drives them with the fake (Principle IV).
 """
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.core import backoff
 from src.core.config import get_settings
 from src.core.errors import AppError, ConflictError, NotFoundError
 from src.integrations.people_client import (
@@ -177,21 +179,35 @@ def _recount(batch: DeleteBatch) -> None:
 
 
 def process_batch(
-    session: Session, batch_id: uuid.UUID, client: PeopleWriteClient
+    session: Session, batch_id: uuid.UUID, client: PeopleWriteClient, *, sleep=time.sleep
 ) -> DeleteBatch:
-    """Execute pending/failed deletions idempotently (FR-022/024). Callable by worker or tests."""
+    """Execute pending/failed deletions idempotently (FR-022/024). Callable by worker or tests.
+
+    Retries each contact on a rate-limit/transient error with backoff before marking it failed, and
+    commits progress every ``export_commit_chunk_size`` records so `deleted_count` advances live and
+    a crash never loses more than one chunk (already-done records are skipped on re-run).
+    """
+    settings = get_settings()
+    chunk, max_attempts = settings.export_commit_chunk_size, settings.export_max_attempts
     batch = get_batch(session, batch_id)
+    since_commit = 0
     for rec in batch.records:
         if rec.status in ("deleted", "skipped_absent"):
             continue  # idempotent: never re-delete
         try:
-            client.delete_contact(rec.origin_resource_name)
+            backoff.retry_call(
+                lambda rn=rec.origin_resource_name: client.delete_contact(rn),
+                max_attempts=max_attempts,
+                retry_on=(RateLimitedError, TransientError),
+                sleep=sleep,
+            )
         except ContactNotFoundError:
             rec.status = "skipped_absent"  # already gone = success (FR-024)
             rec.deleted_at = _now()
         except (RateLimitedError, TransientError) as exc:
-            rec.status = "failed"
+            rec.status = "failed"  # retries exhausted
             rec.error = type(exc).__name__  # redacted
+            since_commit = _maybe_commit(session, batch, since_commit + 1, chunk)
             continue
         else:
             rec.status = "deleted"
@@ -208,6 +224,7 @@ def process_batch(
             source_ref=batch.id,
             details={"record": str(rec.id), "result": rec.status},
         )
+        since_commit = _maybe_commit(session, batch, since_commit + 1, chunk)
 
     _recount(batch)
     batch.status = "failed" if batch.failed_count else "committed"
@@ -216,15 +233,32 @@ def process_batch(
     return batch
 
 
+def _maybe_commit(session: Session, batch: DeleteBatch, since_commit: int, chunk: int) -> int:
+    """Commit a chunk of progress (refreshing the live counts) and reset the counter."""
+    if since_commit >= chunk:
+        _recount(batch)
+        session.commit()
+        return 0
+    return since_commit
+
+
 def process_undo(
-    session: Session, batch_id: uuid.UUID, client: PeopleWriteClient
+    session: Session, batch_id: uuid.UUID, client: PeopleWriteClient, *, sleep=time.sleep
 ) -> DeleteBatch:
     """Re-create every deleted contact from its snapshot (FR-023). Callable by worker or tests."""
+    settings = get_settings()
+    chunk, max_attempts = settings.export_commit_chunk_size, settings.export_max_attempts
     batch = get_batch(session, batch_id)
+    since_commit = 0
     for rec in batch.records:
         if rec.status not in ("deleted", "skipped_absent"):
             continue
-        new_rn = client.create_contact(rec.payload_before)
+        new_rn = backoff.retry_call(
+            lambda payload=rec.payload_before: client.create_contact(payload),
+            max_attempts=max_attempts,
+            retry_on=(RateLimitedError, TransientError),
+            sleep=sleep,
+        )
         rec.restored_resource_name = new_rn
         rec.status = "restored"
         rec.restored_at = _now()
@@ -240,6 +274,10 @@ def process_undo(
             source_ref=batch.id,
             details={"record": str(rec.id)},
         )
+        since_commit += 1
+        if since_commit >= chunk:
+            session.commit()
+            since_commit = 0
     batch.status = "undone"
     batch.undone_at = _now()
     session.commit()

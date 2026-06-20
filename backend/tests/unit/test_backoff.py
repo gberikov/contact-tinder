@@ -1,4 +1,44 @@
+import pytest
+
 from src.core import backoff
+from src.integrations.people_client import (
+    ContactNotFoundError,
+    RateLimitedError,
+    TransientError,
+)
+
+
+def test_retry_call_retries_then_succeeds():
+    calls = {"n": 0}
+    sleeps: list[float] = []
+
+    def fn():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise TransientError()
+        return "ok"
+
+    out = backoff.retry_call(
+        fn, max_attempts=5, retry_on=(TransientError,), sleep=sleeps.append
+    )
+    assert out == "ok"
+    assert calls["n"] == 3 and len(sleeps) == 2  # slept between the 3 attempts
+
+
+def test_retry_call_raises_after_ceiling():
+    def fn():
+        raise RateLimitedError()
+
+    with pytest.raises(RateLimitedError):
+        backoff.retry_call(fn, max_attempts=3, retry_on=(RateLimitedError,), sleep=lambda _: None)
+
+
+def test_retry_call_passes_non_retryable_through_immediately():
+    def fn():
+        raise ContactNotFoundError()
+
+    with pytest.raises(ContactNotFoundError):
+        backoff.retry_call(fn, max_attempts=5, retry_on=(RateLimitedError,), sleep=lambda _: None)
 
 
 def test_next_delay_respects_retry_after():

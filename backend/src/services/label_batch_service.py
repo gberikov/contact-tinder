@@ -8,12 +8,14 @@ Staged edits/transliterations are NEVER written here — label only (FR-013/D4).
 """
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.core import backoff
 from src.core.config import get_settings
 from src.core.errors import ConflictError, NotFoundError
 from src.integrations.people_client import (
@@ -112,22 +114,38 @@ def _recount(batch: LabelBatch) -> None:
 
 
 def process_batch(
-    session: Session, batch_id: uuid.UUID, client: PeopleWriteClient
+    session: Session, batch_id: uuid.UUID, client: PeopleWriteClient, *, sleep=time.sleep
 ) -> LabelBatch:
-    """Assign the `Process` group to pending/failed members idempotently (FR-012). Worker or tests."""
+    """Assign the `Process` group to pending/failed members idempotently (FR-012). Worker or tests.
+
+    Retries each member on a rate-limit/transient error with backoff before marking it failed, and
+    commits progress every ``export_commit_chunk_size`` members so `labeled_count` advances live and
+    a crash never loses more than one chunk.
+    """
+    settings = get_settings()
+    chunk, max_attempts = settings.export_commit_chunk_size, settings.export_max_attempts
     batch = get_batch(session, batch_id)
     label = _ensure_group(session, batch, client)
+    since_commit = 0
     for asn in batch.assignments:
         if asn.status in ("labeled", "skipped_absent"):
             continue  # idempotent: never re-label
         try:
-            client.add_label_members(label.group_resource_name, [asn.origin_resource_name])
+            backoff.retry_call(
+                lambda rn=asn.origin_resource_name: client.add_label_members(
+                    label.group_resource_name, [rn]
+                ),
+                max_attempts=max_attempts,
+                retry_on=(RateLimitedError, TransientError),
+                sleep=sleep,
+            )
         except ContactNotFoundError:
             asn.status = "skipped_absent"  # gone in Google = success (FR-012a)
             asn.labeled_at = _now()
         except (RateLimitedError, TransientError) as exc:
-            asn.status = "failed"
+            asn.status = "failed"  # retries exhausted
             asn.error = type(exc).__name__  # redacted
+            since_commit = _maybe_commit(session, batch, since_commit + 1, chunk)
             continue
         else:
             asn.status = "labeled"
@@ -140,6 +158,7 @@ def process_batch(
             source_ref=batch.id,
             details={"assignment": str(asn.id), "result": asn.status},
         )
+        since_commit = _maybe_commit(session, batch, since_commit + 1, chunk)
 
     _recount(batch)
     if batch.failed_count:
@@ -159,18 +178,37 @@ def process_batch(
     return batch
 
 
+def _maybe_commit(session: Session, batch: LabelBatch, since_commit: int, chunk: int) -> int:
+    """Commit a chunk of progress (refreshing the live counts) and reset the counter."""
+    if since_commit >= chunk:
+        _recount(batch)
+        session.commit()
+        return 0
+    return since_commit
+
+
 def process_undo(
-    session: Session, batch_id: uuid.UUID, client: PeopleWriteClient
+    session: Session, batch_id: uuid.UUID, client: PeopleWriteClient, *, sleep=time.sleep
 ) -> LabelBatch:
     """Remove `Process` membership for every labeled assignment (FR-014). Worker or tests."""
+    settings = get_settings()
+    chunk, max_attempts = settings.export_commit_chunk_size, settings.export_max_attempts
     batch = get_batch(session, batch_id)
     label = session.get(ContactLabel, batch.contact_label_id) if batch.contact_label_id else None
+    since_commit = 0
     for asn in batch.assignments:
         if asn.status != "labeled":
             continue
         if label is not None:
             try:
-                client.remove_label_members(label.group_resource_name, [asn.origin_resource_name])
+                backoff.retry_call(
+                    lambda rn=asn.origin_resource_name: client.remove_label_members(
+                        label.group_resource_name, [rn]
+                    ),
+                    max_attempts=max_attempts,
+                    retry_on=(RateLimitedError, TransientError),
+                    sleep=sleep,
+                )
             except ContactNotFoundError:
                 pass  # already gone = already-satisfied (undo is idempotent)
         asn.status = "removed"
@@ -183,6 +221,10 @@ def process_undo(
             source_ref=batch.id,
             details={"assignment": str(asn.id)},
         )
+        since_commit += 1
+        if since_commit >= chunk:
+            session.commit()
+            since_commit = 0
     batch.status = "undone"
     batch.undone_at = _now()
     session.commit()

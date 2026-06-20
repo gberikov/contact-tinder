@@ -64,35 +64,31 @@ def test_404_is_skipped_absent_success(db):
     assert out.status == "completed"
 
 
-def test_rate_limit_surfaced_then_retry_idempotent(db):
-    """FR-024: a transient throttle is surfaced (run not silently dropped) and a retry completes it."""
+def test_rate_limit_exhausted_is_surfaced_then_retry_idempotent(db):
+    """FR-024: a throttle that outlasts the retries is surfaced as failed; a retry completes it."""
     wc, contacts = _setup(db, count=2)
     run = export_service.start(db, wc.id)
     export_service.confirm_delete(db, run.id)
     batch_id = db.get(ExportRun, run.id).delete_batch_id
+    fail_rn = contacts[0].origin_resource_name
 
-    # One record hits a 429 and is left failed; the run reports the failure (FR-024).
+    # One contact is rate-limited on EVERY attempt → retries exhausted → failed (the other deletes).
     class _Throttle(FakePeopleWriteClient):
-        def __init__(self):
-            super().__init__()
-            self._calls = 0
-
         def delete_contact(self, resource_name):
-            self._calls += 1
-            if self._calls == 1:
+            if resource_name == fail_rn:
                 raise RateLimitedError()
             super().delete_contact(resource_name)
 
-    delete_batch_service.process_batch(db, batch_id, _Throttle())
+    delete_batch_service.process_batch(db, batch_id, _Throttle(), sleep=lambda _: None)
     out = export_service.get_run(db, run.id)
-    assert out.status == "failed" and out.report.failed == 1
+    assert out.status == "failed" and out.report.failed == 1 and out.report.deleted == 1
 
     # Retry with a healthy client — only the failed record is retried; no double-delete.
     client = FakePeopleWriteClient()
-    delete_batch_service.process_batch(db, batch_id, client)
+    delete_batch_service.process_batch(db, batch_id, client, sleep=lambda _: None)
     out = export_service.get_run(db, run.id)
     assert out.status == "completed" and out.report.deleted == 2
-    assert len(client.deleted) == 1  # only the previously-failed contact was re-attempted
+    assert client.deleted == [fail_rn]  # only the previously-failed contact was re-attempted
 
 
 def test_undo_delete_restores(db):
