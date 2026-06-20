@@ -64,19 +64,21 @@ class GoogleOAuthProvider:
         return url
 
     def exchange(self, code: str, state: str) -> OAuthResult:  # pragma: no cover - needs google env
-        from googleapiclient.discovery import build
+        from google.auth.transport.requests import AuthorizedSession
 
         flow = self._flow(code_verifier=self._verifiers.pop(state, None))
         flow.fetch_token(code=code)
         creds = flow.credentials
-        service = build("people", "v1", credentials=creds, cache_discovery=False)
-        me = (
-            service.people()
-            .get(resourceName="people/me", personFields="emailAddresses,metadata,names")
-            .execute()
-        )
-        email = (me.get("emailAddresses") or [{}])[0].get("value", "")
-        account_id = ((me.get("metadata") or {}).get("sources") or [{}])[0].get("id", email)
+
+        # Read the account's stable id (sub) and email from the OIDC userinfo endpoint.
+        # This needs only openid+email (not the broader People `profile` scope).
+        session = AuthorizedSession(creds)
+        resp = session.get("https://openidconnect.googleapis.com/v1/userinfo", timeout=10)
+        resp.raise_for_status()
+        info = resp.json()
+        email = info.get("email", "")
+        account_id = info.get("sub") or email
+
         return OAuthResult(
             google_account_id=account_id,
             email=email,

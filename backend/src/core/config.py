@@ -16,7 +16,13 @@ class Settings(BaseSettings):
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
     google_oauth_redirect_uri: str = "http://localhost:8000/api/accounts/callback"
-    google_scopes: tuple[str, ...] = ("https://www.googleapis.com/auth/contacts.readonly",)
+    # contacts.readonly = the feature; openid+email = identify which account a snapshot
+    # belongs to (FR-018). All read-only; no write/delete scope is ever requested.
+    google_scopes: tuple[str, ...] = (
+        "openid",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/contacts.readonly",
+    )
 
     # Token encryption at rest (FR-002)
     token_encryption_key: str = ""
