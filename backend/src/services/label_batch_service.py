@@ -124,12 +124,15 @@ def process_batch(
     """
     settings = get_settings()
     chunk, max_attempts = settings.export_commit_chunk_size, settings.export_max_attempts
+    pace = settings.export_write_min_interval_seconds
     batch = get_batch(session, batch_id)
     label = _ensure_group(session, batch, client)
     since_commit = 0
     for asn in batch.assignments:
         if asn.status in ("labeled", "skipped_absent"):
             continue  # idempotent: never re-label
+        if pace:
+            sleep(pace)  # stay under Google's per-minute write quota
         try:
             backoff.retry_call(
                 lambda rn=asn.origin_resource_name: client.add_label_members(
@@ -193,12 +196,15 @@ def process_undo(
     """Remove `Process` membership for every labeled assignment (FR-014). Worker or tests."""
     settings = get_settings()
     chunk, max_attempts = settings.export_commit_chunk_size, settings.export_max_attempts
+    pace = settings.export_write_min_interval_seconds
     batch = get_batch(session, batch_id)
     label = session.get(ContactLabel, batch.contact_label_id) if batch.contact_label_id else None
     since_commit = 0
     for asn in batch.assignments:
         if asn.status != "labeled":
             continue
+        if pace:
+            sleep(pace)
         if label is not None:
             try:
                 backoff.retry_call(

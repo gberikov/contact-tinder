@@ -189,11 +189,14 @@ def process_batch(
     """
     settings = get_settings()
     chunk, max_attempts = settings.export_commit_chunk_size, settings.export_max_attempts
+    pace = settings.export_write_min_interval_seconds
     batch = get_batch(session, batch_id)
     since_commit = 0
     for rec in batch.records:
         if rec.status in ("deleted", "skipped_absent"):
             continue  # idempotent: never re-delete
+        if pace:
+            sleep(pace)  # stay under Google's per-minute write quota
         try:
             backoff.retry_call(
                 lambda rn=rec.origin_resource_name: client.delete_contact(rn),
@@ -248,11 +251,14 @@ def process_undo(
     """Re-create every deleted contact from its snapshot (FR-023). Callable by worker or tests."""
     settings = get_settings()
     chunk, max_attempts = settings.export_commit_chunk_size, settings.export_max_attempts
+    pace = settings.export_write_min_interval_seconds
     batch = get_batch(session, batch_id)
     since_commit = 0
     for rec in batch.records:
         if rec.status not in ("deleted", "skipped_absent"):
             continue
+        if pace:
+            sleep(pace)
         new_rn = backoff.retry_call(
             lambda payload=rec.payload_before: client.create_contact(payload),
             max_attempts=max_attempts,

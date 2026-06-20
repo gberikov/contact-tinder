@@ -86,6 +86,30 @@ def test_label_retries_transient_then_succeeds(db):
     assert out.status == "completed" and out.report.labeled == 1
 
 
+def test_write_pacing_sleeps_before_each_write(db, monkeypatch):
+    """With pacing configured, the worker waits between writes to stay under Google's quota."""
+    wc, contacts = _setup(db, count=3, outcome="delete")
+    run = export_service.start(db, wc.id)
+    export_service.confirm_delete(db, run.id)
+    batch_id = db.get(ExportRun, run.id).delete_batch_id
+
+    monkeypatch.setattr(
+        delete_batch_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            export_commit_chunk_size=50,
+            export_max_attempts=5,
+            export_write_min_interval_seconds=0.5,
+        ),
+    )
+    waits: list[float] = []
+    delete_batch_service.process_batch(db, batch_id, FakePeopleWriteClient(), sleep=waits.append)
+
+    out = export_service.get_run(db, run.id)
+    assert out.report.deleted == 3
+    assert waits == [0.5, 0.5, 0.5]  # paced once per record (no retries needed)
+
+
 def test_chunked_commit_persists_progress_before_a_crash(db, monkeypatch):
     """A crash mid-batch keeps the already-committed chunk durable (records stay deleted)."""
     wc, contacts = _setup(db, count=5, outcome="delete")
@@ -97,7 +121,11 @@ def test_chunked_commit_persists_progress_before_a_crash(db, monkeypatch):
     monkeypatch.setattr(
         delete_batch_service,
         "get_settings",
-        lambda: SimpleNamespace(export_commit_chunk_size=2, export_max_attempts=5),
+        lambda: SimpleNamespace(
+            export_commit_chunk_size=2,
+            export_max_attempts=5,
+            export_write_min_interval_seconds=0,
+        ),
     )
 
     class _Crash(FakePeopleWriteClient):

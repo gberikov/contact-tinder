@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     # on a Google rate-limit / transient error (with backoff) before marking it failed.
     export_commit_chunk_size: int = 50
     export_max_attempts: int = 5
+    # Pace Google write calls (seconds between deletes/label-adds) to stay under the People API
+    # write quota (~90 writes/min/user, shared by contact deletes + contact-group writes). 0 = no
+    # pacing (default; tests). Set e.g. 0.75 on the worker for large bulk exports to avoid 429 storms.
+    export_write_min_interval_seconds: float = 0.0
 
 
 @lru_cache
