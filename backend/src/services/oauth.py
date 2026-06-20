@@ -1,11 +1,16 @@
 """OAuth seam — isolates Google token exchange so it can be faked in tests (Principle IV)."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
 from src.core.config import get_settings
+
+# Google may return extra granted scopes (e.g. via include_granted_scopes); relax oauthlib's
+# strict scope-equality check so the token exchange doesn't raise on a harmless scope change.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
 
 
 @dataclass
@@ -20,13 +25,17 @@ class OAuthResult:
 
 class OAuthProvider(Protocol):
     def authorization_url(self, state: str) -> str: ...
-    def exchange(self, code: str) -> OAuthResult: ...
+    def exchange(self, code: str, state: str) -> OAuthResult: ...
 
 
 class GoogleOAuthProvider:
     """Real provider backed by google-auth-oauthlib + the People API `people/me` profile."""
 
-    def _flow(self):
+    def __init__(self) -> None:
+        # PKCE code_verifier per state — generated at authorization_url, reused at exchange.
+        self._verifiers: dict[str, str | None] = {}
+
+    def _flow(self, code_verifier: str | None = None):
         from google_auth_oauthlib.flow import Flow
 
         s = get_settings()
@@ -42,6 +51,7 @@ class GoogleOAuthProvider:
             },
             scopes=list(s.google_scopes),
             redirect_uri=s.google_oauth_redirect_uri,
+            code_verifier=code_verifier,
         )
 
     def authorization_url(self, state: str) -> str:  # pragma: no cover - needs google env
@@ -49,12 +59,14 @@ class GoogleOAuthProvider:
         url, _ = flow.authorization_url(
             access_type="offline", include_granted_scopes="true", prompt="consent", state=state
         )
+        # Persist the PKCE verifier so the callback can complete the exchange.
+        self._verifiers[state] = flow.code_verifier
         return url
 
-    def exchange(self, code: str) -> OAuthResult:  # pragma: no cover - needs google env
+    def exchange(self, code: str, state: str) -> OAuthResult:  # pragma: no cover - needs google env
         from googleapiclient.discovery import build
 
-        flow = self._flow()
+        flow = self._flow(code_verifier=self._verifiers.pop(state, None))
         flow.fetch_token(code=code)
         creds = flow.credentials
         service = build("people", "v1", credentials=creds, cache_discovery=False)

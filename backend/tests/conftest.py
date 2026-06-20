@@ -78,7 +78,7 @@ class FakeOAuthProvider:
     def authorization_url(self, state: str) -> str:
         return f"https://accounts.google.com/o/oauth2/auth?state={state}"
 
-    def exchange(self, code: str) -> OAuthResult:
+    def exchange(self, code: str, state: str) -> OAuthResult:
         return self._next
 
 

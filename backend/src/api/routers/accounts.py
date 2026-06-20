@@ -47,7 +47,7 @@ def callback(
     provider: OAuthProvider = Depends(get_oauth_provider),
     session: Session = Depends(get_session),
 ) -> RedirectResponse:
-    result = provider.exchange(code)
+    result = provider.exchange(code, state)
     account_service.store_connection(session, result)
     session.commit()
     return RedirectResponse(url=f"{get_settings().frontend_url}/accounts", status_code=302)
