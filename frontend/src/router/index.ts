@@ -21,5 +21,20 @@ export const router = createRouter({
       name: 'working-copy-dedup',
       component: () => import('@/pages/WorkingCopyDedup.vue'),
     },
+    {
+      path: '/working-copies/:id/triage',
+      name: 'working-copy-triage',
+      component: () => import('@/pages/WorkingCopyTriage.vue'),
+    },
+    {
+      path: '/triage-sessions/:id/processing',
+      name: 'triage-processing',
+      component: () => import('@/pages/Processing.vue'),
+    },
+    {
+      path: '/working-copies/:id/delete-review',
+      name: 'delete-review',
+      component: () => import('@/pages/DeleteReview.vue'),
+    },
   ],
 });
