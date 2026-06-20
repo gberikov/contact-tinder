@@ -171,7 +171,7 @@ copies exist, audited. Sequenced after US3 because the guard depends on working 
 - [X] T056 Run `biome ci` on `frontend/` and fix violations (constitution CI gate)
 - [X] T057 [P] Author setup/run docs (Google Cloud OAuth setup, env, compose) in `README.md`
 - [X] T058 Security hardening pass: assert no tokens/PII in logs or API responses; verify only `contacts.readonly` requested; verify per-account isolation (Principles I & V)
-- [ ] T059 Execute `quickstart.md` end-to-end (US1–US3 + deletion + multi-account isolation + privacy spot-check; validate SC-001…SC-009)
+- [~] T059 Execute `quickstart.md` end-to-end. Validated against **live Postgres** (docker compose): `alembic upgrade head` applies the JSONB schema; full suite (40 tests incl. real `FOR UPDATE SKIP LOCKED` worker claim) green on Postgres; uvicorn server boots and serves all endpoints; seeded snapshot → list/contacts (payload fidelity), working copy, and delete-guard (409) verified live. **Remaining (needs a real Google account + browser):** live OAuth consent + real contact import — the Google call is faked at the `PeopleClient` seam in this environment.
 
 ---
 

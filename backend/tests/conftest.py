@@ -25,15 +25,26 @@ from src.services.oauth import OAuthResult  # noqa: E402
 
 @pytest.fixture
 def engine():
-    eng = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        future=True,
-    )
-    Base.metadata.create_all(eng)
-    yield eng
-    Base.metadata.drop_all(eng)
+    # Set TEST_DATABASE_URL to a Postgres DSN to validate against the real datastore (JSONB,
+    # UUID, bytea). Defaults to in-memory SQLite for fast, dependency-free runs.
+    test_url = os.environ.get("TEST_DATABASE_URL")
+    if test_url:
+        eng = create_engine(test_url, future=True)
+        Base.metadata.drop_all(eng)
+        Base.metadata.create_all(eng)
+        yield eng
+        Base.metadata.drop_all(eng)
+        eng.dispose()
+    else:
+        eng = create_engine(
+            "sqlite+pysqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+            future=True,
+        )
+        Base.metadata.create_all(eng)
+        yield eng
+        Base.metadata.drop_all(eng)
 
 
 @pytest.fixture
