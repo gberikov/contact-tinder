@@ -34,6 +34,21 @@ class Settings(BaseSettings):
     import_max_attempts: int = 5
     import_page_size: int = 1000
 
+    # Deduplication (feature 002). The real Zingg/Spark engine runs only in the `dedup` container;
+    # CI and the backend default to the Spark-free fake engine.
+    dedup_engine: str = "fake"  # fake | zingg
+    dedup_model_version: str = "contacts-v1"
+    dedup_confidence_floor: float = 0.5  # precision-favouring default (research D5)
+    dedup_num_partitions: int = 8  # Spark local-mode tuning (research D9)
+    # JDBC connection the Zingg engine uses to read input / write match output (research D3).
+    dedup_jdbc_url: str = ""
+    dedup_jdbc_user: str = ""
+    dedup_jdbc_password: str = ""
+    dedup_zingg_dir: str = "/app/dedup/model"
+    dedup_model_id: str = "100"
+    # NOTE: there is intentionally no merge-undo retention/expiry setting — merges are undoable for
+    # the life of the working copy (research D6); undo is gated only by the MergeRecord existing.
+
 
 @lru_cache
 def get_settings() -> Settings:

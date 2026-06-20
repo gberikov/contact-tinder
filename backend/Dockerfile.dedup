@@ -1,0 +1,25 @@
+# Dedup engine image (feature 002) — based on the OFFICIAL Zingg image.
+#
+# zingg/zingg already bundles Apache Spark + JVM + the Zingg distribution (jars under $ZINGG_HOME)
+# + the `zingg` Python API. We only layer our app code and the few pure-Python deps the worker
+# needs to talk to Postgres. We do NOT reinstall Spark/Zingg/pyspark — the base image owns them,
+# which also guarantees the Python `zingg` package matches the bundled jars/model format.
+FROM zingg/zingg:0.6.0
+
+WORKDIR /app
+
+# Our worker's non-Spark deps (Spark/Zingg/pyspark come from the base image).
+RUN pip install --no-cache-dir \
+    "sqlalchemy>=2.0" "psycopg[binary]>=3.2" "pydantic>=2.7" "pydantic-settings>=2.3"
+
+COPY . .
+
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    DEDUP_ENGINE=zingg
+
+# Zingg programs are PySpark programs: a SparkSession created by our worker must have the Zingg
+# assembly jar on the driver classpath. ZINGG_HOME is set by the base image; we add its jar(s) to
+# PYSPARK_SUBMIT_ARGS so `ZinggWithSpark` (which calls SparkSession.builder.getOrCreate()) finds
+# them. The jar glob keeps this independent of the exact Zingg version/filename.
+CMD ["bash", "-lc", "export PYSPARK_SUBMIT_ARGS=\"--jars $(ls $ZINGG_HOME/*.jar 2>/dev/null | paste -sd, -) pyspark-shell\"; exec python -m src.workers.dedup_worker"]

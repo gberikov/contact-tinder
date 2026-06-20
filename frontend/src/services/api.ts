@@ -54,6 +54,68 @@ export interface ContactPage {
   total: number;
 }
 
+// ---- Deduplication (feature 002) ----------------------------------------------------------
+
+export interface DedupRun {
+  id: string;
+  workingCopyId: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  modelVersion: string;
+  confidenceFloor: number;
+  clusterCount?: number | null;
+  lastError?: string | null;
+  createdAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}
+
+export interface ContactSummary {
+  displayName?: string | null;
+  primaryEmail?: string | null;
+  primaryPhone?: string | null;
+  organization?: string | null;
+  status: 'active' | 'retired';
+}
+
+export interface ClusterMember {
+  id: string;
+  workingCopyContactId: string;
+  matchScore?: number | null;
+  isSurvivor: boolean;
+  contact: ContactSummary;
+}
+
+export interface Cluster {
+  id: string;
+  dedupRunId: string;
+  workingCopyId: string;
+  confidence: number;
+  minScore?: number | null;
+  size: number;
+  status: 'pending' | 'merged' | 'dismissed' | 'superseded';
+  mergeRecordId?: string | null;
+  members: ClusterMember[];
+}
+
+export interface MergeConflict {
+  field: string;
+  chosen: string;
+  candidates: string[];
+}
+
+export interface MergePreview {
+  survivorContactId: string;
+  proposedPayload: Record<string, unknown>;
+  conflicts: MergeConflict[];
+}
+
+export interface MergeResult {
+  mergeRecordId: string;
+  survivorContactId: string;
+  clusterId: string;
+  retiredContactIds: string[];
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -111,4 +173,31 @@ export const api = {
       body: JSON.stringify({ label }),
     }),
   listWorkingCopies: () => request<WorkingCopy[]>('/working-copies'),
+
+  // Deduplication
+  startDedupRun: (workingCopyId: string, background = true) =>
+    request<DedupRun>(`/working-copies/${workingCopyId}/dedup-runs?background=${background}`, {
+      method: 'POST',
+    }),
+  listDedupRuns: (workingCopyId: string) =>
+    request<DedupRun[]>(`/working-copies/${workingCopyId}/dedup-runs`),
+  getDedupRun: (runId: string) => request<DedupRun>(`/dedup-runs/${runId}`),
+  listClusters: (runId: string, minConfidence?: number) =>
+    request<Cluster[]>(
+      `/dedup-runs/${runId}/clusters${minConfidence != null ? `?minConfidence=${minConfidence}` : ''}`,
+    ),
+  getCluster: (clusterId: string) => request<Cluster>(`/clusters/${clusterId}`),
+  mergePreview: (clusterId: string, survivorContactId?: string) =>
+    request<MergePreview>(
+      `/clusters/${clusterId}/merge-preview${survivorContactId ? `?survivorContactId=${survivorContactId}` : ''}`,
+    ),
+  mergeCluster: (clusterId: string, survivorContactId?: string) =>
+    request<MergeResult>(`/clusters/${clusterId}/merge`, {
+      method: 'POST',
+      body: JSON.stringify({ survivorContactId }),
+    }),
+  dismissCluster: (clusterId: string) =>
+    request<Cluster>(`/clusters/${clusterId}/dismiss`, { method: 'POST' }),
+  undoMerge: (mergeRecordId: string) =>
+    request<Cluster>(`/merge-records/${mergeRecordId}/undo`, { method: 'POST' }),
 };

@@ -16,5 +16,10 @@ export const router = createRouter({
       name: 'working-copies',
       component: () => import('@/pages/WorkingCopies.vue'),
     },
+    {
+      path: '/working-copies/:id/dedup',
+      name: 'working-copy-dedup',
+      component: () => import('@/pages/WorkingCopyDedup.vue'),
+    },
   ],
 });

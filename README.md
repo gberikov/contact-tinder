@@ -3,19 +3,23 @@
 Self-hosted tool to clean up Google Contacts: immutable **snapshots** (backups) via the Google
 People API, **working copies** derived from them, and (later) deduplication + keep/delete triage.
 
-Feature **001-people-api-snapshots** (this slice) delivers the data foundation: connect Google
-accounts (read-only), capture immutable snapshots, browse them, derive working copies, and delete
-snapshots safely. No data is ever written back to Google.
+Feature **001-people-api-snapshots** delivers the data foundation: connect Google accounts
+(read-only), capture immutable snapshots, browse them, derive working copies, and delete snapshots
+safely. Feature **002-zingg-dedup** adds **deduplication** of a working copy with Zingg: find
+duplicate clusters, review them, and resolve each by a reversible survivor-based merge or dismiss.
+No data is ever written back to Google.
 
-See the project constitution in `.specify/memory/constitution.md` and the feature spec/plan under
-`specs/001-people-api-snapshots/`.
+See the project constitution in `.specify/memory/constitution.md` and the feature spec/plans under
+`specs/001-people-api-snapshots/` and `specs/002-zingg-dedup/`. The deduplication matching model and
+how it is trained are documented canonically in `backend/dedup/model/README.md`.
 
 ## Stack
 
 - **Backend**: Python 3.12 · FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL
 - **Worker**: PostgreSQL-backed resumable import job (no Redis)
 - **Frontend**: Vue 3 · Vite · TypeScript · Pinia · Biome
-- **Dedup engine** (future): Zingg on Apache Spark
+- **Dedup engine**: Zingg on Apache Spark in a dedicated `dedup` container (bundled pre-trained
+  model; backend talks to it via a `DedupEngine` seam — CI uses a Spark-free fake)
 
 ## Google Cloud setup
 
