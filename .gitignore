@@ -1,24 +1,88 @@
+# =============================================================================
+# Constitution: Privacy & Data Protection (Principle I) — NON-NEGOTIABLE
+# Secrets and Google OAuth credentials MUST NEVER be committed.
+# =============================================================================
+# Environment / secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.secret
+*.key
+*.pem
+
+# Google OAuth / API credentials & tokens (encrypted at rest, never in VCS)
+client_secret*.json
+credentials.json
+token.json
+tokens/
+*.token
+*-service-account.json
+service-account*.json
+gcp-*.json
+
+# Token-encryption keys / keystores
+*.keystore
+keys/
+
+# =============================================================================
+# Constitution: Non-Destructive by Default (II) & Auditability (V)
+# Contact snapshots, exports, audit logs contain user PII — keep out of VCS.
+# =============================================================================
+data/
+snapshots/
+exports/
+dumps/
+*.dump
+*.sql.gz
+contacts*.csv
+contacts*.json
+audit*.log
+*.log
+logs/
+
+# =============================================================================
+# Deduplication engine (Zingg / Apache Spark) working artifacts
+# =============================================================================
+models/
+zingg/models/
+spark-warehouse/
+metastore_db/
+derby.log
+*.crc
+
+# =============================================================================
 # IDE
+# =============================================================================
 .idea/
 .vscode/
 
+# =============================================================================
 # OS
+# =============================================================================
 .DS_Store
 Thumbs.db
 
-# Python
+# =============================================================================
+# Backend — Python / FastAPI
+# =============================================================================
 __pycache__/
 *.py[cod]
 .venv/
 venv/
-.env
-.env.*
-!.env.example
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Node / frontend
+# =============================================================================
+# Frontend — Vue 3 / Vite / Biome
+# =============================================================================
 node_modules/
 dist/
 *.local
+.vite/
 
+# =============================================================================
 # Claude Code
+# =============================================================================
 .claude/settings.local.json
