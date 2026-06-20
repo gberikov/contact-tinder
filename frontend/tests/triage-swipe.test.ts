@@ -80,4 +80,35 @@ describe('triage store — swipe (US1)', () => {
     expect(store.currentCard?.contact.displayName).toBe('Boris'); // advanced
     expect(store.summary?.remaining).toBe(1);
   });
+
+  it('undoes the last decision (keyboard ↓ / U) and reloads the deck', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchSequence([
+        { status: 201, body: session(2) },
+        { status: 200, body: deck },
+        {
+          status: 200,
+          body: {
+            id: 'd1',
+            sessionId: 's-1',
+            workingCopyContactId: 'c1',
+            outcome: 'keep',
+            decidedAt: 'now',
+          },
+        },
+        { status: 200, body: session(1) },
+        { status: 204, body: null }, // undoDecision
+        { status: 200, body: session(2) },
+        { status: 200, body: deck },
+      ]),
+    );
+    const store = useTriageStore();
+    await store.open('wc-1');
+    await store.decide('keep');
+    await store.undoLast();
+    expect(store.currentCard?.contact.displayName).toBe('Anna'); // back to the start
+    expect(store.summary?.remaining).toBe(2);
+    expect(store.lastDecided).toBeNull();
+  });
 });

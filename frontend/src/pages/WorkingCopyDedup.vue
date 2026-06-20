@@ -3,7 +3,7 @@ import ClusterList from '@/components/ClusterList.vue';
 import DedupRunPanel from '@/components/DedupRunPanel.vue';
 import { useDedupStore } from '@/stores/dedup';
 import { storeToRefs } from 'pinia';
-import { useRoute } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 
 const route = useRoute();
 const workingCopyId = route.params.id as string;
@@ -23,5 +23,15 @@ async function onDismiss(clusterId: string) {
     <h2>Deduplicate working copy</h2>
     <DedupRunPanel :working-copy-id="workingCopyId" />
     <ClusterList :clusters="pendingClusters" @merge="onMerge" @dismiss="onDismiss" />
+    <p class="next">
+      Done deduplicating?
+      <RouterLink :to="`/working-copies/${workingCopyId}/triage`">Start triage →</RouterLink>
+    </p>
   </section>
 </template>
+
+<style scoped>
+.next {
+  margin-top: 1.5rem;
+}
+</style>

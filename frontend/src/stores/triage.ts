@@ -16,6 +16,7 @@ interface State {
   processing: ProcessingItem[];
   batch: DeleteBatch | null;
   preview: DeletionRecord[];
+  lastDecided: string | null;
   loading: boolean;
   error: string | null;
 }
@@ -28,6 +29,7 @@ export const useTriageStore = defineStore('triage', {
     processing: [],
     batch: null,
     preview: [],
+    lastDecided: null,
     loading: false,
     error: null,
   }),
@@ -67,11 +69,25 @@ export const useTriageStore = defineStore('triage', {
           wantsEdit: opts?.wantsEdit,
           wantsTransliterate: opts?.wantsTransliterate,
         });
+        this.lastDecided = card.workingCopyContactId;
         this.session = await api.getTriageSession(this.session.id);
         if (this.deck.length === 0) await this.loadDeck();
       } catch (e) {
         this.error = (e as Error).message;
         this.deck = [card, ...this.deck]; // roll back on failure
+      }
+    },
+    /** Undo the most recently decided contact (keyboard ↓ / U); it returns to the deck. */
+    async undoLast() {
+      if (!this.session || !this.lastDecided) return;
+      const contactId = this.lastDecided;
+      this.lastDecided = null;
+      try {
+        await api.undoDecision(this.session.id, contactId);
+        this.session = await api.getTriageSession(this.session.id);
+        await this.loadDeck();
+      } catch (e) {
+        this.error = (e as Error).message;
       }
     },
     async loadProcessing() {
