@@ -48,6 +48,10 @@ def build_write_client(session: Session, batch: LabelBatch) -> PeopleWriteClient
         token=crypto.decrypt(account.credential.enc_access_token),
         refresh_token=crypto.decrypt(account.credential.enc_refresh_token),
         token_uri="https://oauth2.googleapis.com/token",
+        # client_id/secret are REQUIRED to refresh the access token mid-run (long batches outlive
+        # the ~1h token); without them google-auth raises RefreshError and the batch stalls.
+        client_id=settings.google_oauth_client_id,
+        client_secret=settings.google_oauth_client_secret,
         scopes=account.granted_scopes.split() if account.granted_scopes else None,
     )
     return get_write_client("google", credentials=creds)
