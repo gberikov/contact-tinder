@@ -1,0 +1,293 @@
+openapi: 3.1.0
+info:
+  title: Contact Tinder — Snapshots & Working Copies API
+  version: 0.1.0
+  description: >
+    Backend REST API for feature 001-people-api-snapshots. Read-only with respect to Google
+    (contacts.readonly). Credentials/tokens are never returned by any endpoint.
+servers:
+  - url: /api
+
+paths:
+  /accounts:
+    get:
+      summary: List connected Google accounts
+      operationId: listAccounts
+      responses:
+        "200":
+          description: Connected accounts (no credentials included)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Account" }
+
+  /accounts/connect:
+    post:
+      summary: Begin Google OAuth (read-only contacts) and return the authorization URL
+      operationId: connectAccount
+      responses:
+        "200":
+          description: Authorization URL to redirect the operator to
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authorizationUrl]
+                properties:
+                  authorizationUrl: { type: string, format: uri }
+
+  /accounts/callback:
+    get:
+      summary: OAuth redirect callback (exchanges code for tokens, stored encrypted)
+      operationId: oauthCallback
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "302": { description: Redirect back into the app after the account is connected }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /accounts/{accountId}:
+    delete:
+      summary: Disconnect a Google account
+      operationId: disconnectAccount
+      parameters: [ { $ref: "#/components/parameters/accountId" } ]
+      responses:
+        "204": { description: Disconnected }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /accounts/{accountId}/snapshots:
+    post:
+      summary: Create a new snapshot (starts a resumable background import)
+      operationId: createSnapshot
+      parameters: [ { $ref: "#/components/parameters/accountId" } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string }
+      responses:
+        "202":
+          description: Snapshot created in `importing` state; import job started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Snapshot" }
+        "401": { $ref: "#/components/responses/Error" }   # account needs re-auth (FR-017)
+        "409": { $ref: "#/components/responses/Error" }   # an import is already in progress
+
+  /snapshots:
+    get:
+      summary: List all snapshots across accounts (with metadata + workingCopyCount)
+      operationId: listSnapshots
+      responses:
+        "200":
+          description: Snapshots ordered newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Snapshot" }
+
+  /snapshots/{snapshotId}:
+    get:
+      summary: Get snapshot detail
+      operationId: getSnapshot
+      parameters: [ { $ref: "#/components/parameters/snapshotId" } ]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Snapshot" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      summary: Delete a snapshot (requires confirmation; blocked while working copies exist)
+      operationId: deleteSnapshot
+      parameters:
+        - { $ref: "#/components/parameters/snapshotId" }
+        - name: confirm
+          in: query
+          required: true
+          description: Must be true; explicit confirmation gate (FR-021)
+          schema: { type: boolean }
+      responses:
+        "204": { description: Deleted (audit entry recorded) }
+        "409":
+          description: Blocked — snapshot still has working copies (FR-022)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "400": { $ref: "#/components/responses/Error" }   # missing confirmation
+        "404": { $ref: "#/components/responses/Error" }
+
+  /snapshots/{snapshotId}/import:
+    get:
+      summary: Get import job progress/status for a snapshot
+      operationId: getImportJob
+      parameters: [ { $ref: "#/components/parameters/snapshotId" } ]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJob" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /snapshots/{snapshotId}/contacts:
+    get:
+      summary: Browse snapshot contacts (read-only, paginated)
+      operationId: listSnapshotContacts
+      parameters:
+        - { $ref: "#/components/parameters/snapshotId" }
+        - { $ref: "#/components/parameters/page" }
+        - { $ref: "#/components/parameters/pageSize" }
+        - { name: q, in: query, schema: { type: string }, description: optional name/email filter }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactPage" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /snapshots/{snapshotId}/working-copies:
+    post:
+      summary: Create a working copy from this snapshot
+      operationId: createWorkingCopy
+      parameters: [ { $ref: "#/components/parameters/snapshotId" } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string }
+      responses:
+        "201":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkingCopy" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }   # snapshot not yet `complete`
+
+  /working-copies:
+    get:
+      summary: List working copies
+      operationId: listWorkingCopies
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkingCopy" }
+
+  /working-copies/{workingCopyId}/contacts:
+    get:
+      summary: Browse working-copy contacts (paginated)
+      operationId: listWorkingCopyContacts
+      parameters:
+        - { $ref: "#/components/parameters/workingCopyId" }
+        - { $ref: "#/components/parameters/page" }
+        - { $ref: "#/components/parameters/pageSize" }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactPage" }
+        "404": { $ref: "#/components/responses/Error" }
+
+components:
+  parameters:
+    accountId: { name: accountId, in: path, required: true, schema: { type: string, format: uuid } }
+    snapshotId: { name: snapshotId, in: path, required: true, schema: { type: string, format: uuid } }
+    workingCopyId: { name: workingCopyId, in: path, required: true, schema: { type: string, format: uuid } }
+    page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    pageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Account:
+      type: object
+      description: A connected Google account. NEVER includes tokens/credentials.
+      required: [id, email, status]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        status: { type: string, enum: [connected, needs_reauth, revoked] }
+        grantedScopes: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+
+    Snapshot:
+      type: object
+      required: [id, accountId, status, source]
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        accountEmail: { type: string }
+        status: { type: string, enum: [importing, complete, failed, deleting] }
+        source: { type: string, enum: [personal_connections] }
+        contactCount: { type: integer, nullable: true }
+        workingCopyCount: { type: integer }
+        label: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        finalizedAt: { type: string, format: date-time, nullable: true }
+
+    ImportJob:
+      type: object
+      required: [snapshotId, status]
+      properties:
+        snapshotId: { type: string, format: uuid }
+        status: { type: string, enum: [queued, running, completed, failed] }
+        fetchedCount: { type: integer }
+        totalEstimate: { type: integer, nullable: true }
+        lastError: { type: string, nullable: true }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+
+    WorkingCopy:
+      type: object
+      required: [id, snapshotId, label, status]
+      properties:
+        id: { type: string, format: uuid }
+        snapshotId: { type: string, format: uuid }
+        label: { type: string }
+        status: { type: string, enum: [creating, ready] }
+        contactCount: { type: integer, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    Contact:
+      type: object
+      description: A captured contact (snapshot = read-only; working copy = editable elsewhere).
+      required: [id, resourceName]
+      properties:
+        id: { type: string, format: uuid }
+        resourceName: { type: string }
+        displayName: { type: string, nullable: true }
+        primaryEmail: { type: string, nullable: true }
+        primaryPhone: { type: string, nullable: true }
+        payload: { type: object, description: raw Google Person payload }
+
+    ContactPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Contact" } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }

@@ -81,6 +81,7 @@ node_modules/
 dist/
 *.local
 .vite/
+*.tsbuildinfo
 
 # =============================================================================
 # Claude Code
