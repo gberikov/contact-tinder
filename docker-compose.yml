@@ -47,5 +47,24 @@ services:
     depends_on:
       - backend
 
+  # Deduplication engine (feature 002): built FROM the official zingg/zingg image (Spark + JVM +
+  # Zingg + python `zingg`), with our worker layered on. Consumes DedupRun jobs from Postgres
+  # (FOR UPDATE SKIP LOCKED). Contact data stays on the internal network (Principle I).
+  dedup:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dedup
+    command: python -m src.workers.dedup_worker
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://app:app@db:5432/contacttinder
+      DEDUP_ENGINE: zingg
+      DEDUP_JDBC_URL: jdbc:postgresql://db:5432/contacttinder
+      DEDUP_JDBC_USER: app
+      DEDUP_JDBC_PASSWORD: app
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:

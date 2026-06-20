@@ -1,0 +1,318 @@
+openapi: 3.1.0
+info:
+  title: Contact Tinder — Working-Copy Deduplication API
+  version: 0.1.0
+  description: >
+    Backend REST API for feature 002-zingg-dedup. Operates only on existing working copies
+    (feature 001). Makes ZERO Google calls and never writes to the source snapshot. Deduplication
+    runs as a PostgreSQL-backed job consumed by a separate Spark/Zingg container; results are
+    duplicate clusters with confidence scores that the operator resolves by survivor-based merge
+    (reversible) or dismiss. No cluster is ever merged/dismissed without an explicit operator action.
+servers:
+  - url: /api
+
+paths:
+  /working-copies/{workingCopyId}/dedup-runs:
+    post:
+      summary: Start a deduplication run over a working copy
+      operationId: startDedupRun
+      parameters:
+        - $ref: "#/components/parameters/WorkingCopyId"
+      responses:
+        "202":
+          description: Run enqueued (queued/running)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DedupRun" }
+        "409":
+          description: A run is already active for this working copy (FR-007)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    get:
+      summary: List dedup runs for a working copy (most recent first)
+      operationId: listDedupRuns
+      parameters:
+        - $ref: "#/components/parameters/WorkingCopyId"
+      responses:
+        "200":
+          description: Runs for the working copy
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DedupRun" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /dedup-runs/{runId}:
+    get:
+      summary: Get a dedup run with progress/terminal status
+      operationId: getDedupRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DedupRun" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /dedup-runs/{runId}/clusters:
+    get:
+      summary: List duplicate clusters for a completed run (ordered by confidence desc)
+      operationId: listClusters
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, merged, dismissed, superseded]
+          description: Filter by resolution status (default pending)
+        - name: minConfidence
+          in: query
+          required: false
+          schema: { type: number, format: double }
+          description: Only clusters with confidence ≥ this value (FR-011)
+      responses:
+        "200":
+          description: Clusters with members
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Cluster" }
+        "409":
+          description: Run not completed yet (no actionable clusters)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /clusters/{clusterId}:
+    get:
+      summary: Get one cluster with its members' contact details (read-only review)
+      operationId: getCluster
+      parameters:
+        - $ref: "#/components/parameters/ClusterId"
+      responses:
+        "200":
+          description: Cluster with members
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cluster" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /clusters/{clusterId}/merge-preview:
+    get:
+      summary: Get the proposed survivor + merged payload before confirming (FR-015)
+      operationId: getMergePreview
+      parameters:
+        - $ref: "#/components/parameters/ClusterId"
+        - name: survivorContactId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+          description: Override the default survivor (default = most complete member)
+      responses:
+        "200":
+          description: Proposed merge with field-level conflicts highlighted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MergePreview" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /clusters/{clusterId}/merge:
+    post:
+      summary: Confirm a survivor-based merge of the cluster within the working copy (FR-016)
+      operationId: mergeCluster
+      parameters:
+        - $ref: "#/components/parameters/ClusterId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MergeRequest" }
+      responses:
+        "200":
+          description: Merge applied; returns the survivor contact and merge record id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MergeResult" }
+        "409":
+          description: Cluster not pending, or a member is no longer active (FR-020)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /clusters/{clusterId}/dismiss:
+    post:
+      summary: Dismiss a cluster as "not a duplicate" (per-run only, FR-019)
+      operationId: dismissCluster
+      parameters:
+        - $ref: "#/components/parameters/ClusterId"
+      responses:
+        "200":
+          description: Cluster dismissed; members remain separate, active contacts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cluster" }
+        "409":
+          description: Cluster not in a dismissable (pending) state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /merge-records/{mergeRecordId}/undo:
+    post:
+      summary: Undo a merge, restoring the cluster's original contacts exactly (FR-018)
+      operationId: undoMerge
+      parameters:
+        - name: mergeRecordId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Merge undone; survivor restored and retired members reactivated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Cluster" }
+        "409":
+          description: Merge already undone
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  parameters:
+    WorkingCopyId:
+      name: workingCopyId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ClusterId:
+      name: clusterId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    DedupRun:
+      type: object
+      required: [id, workingCopyId, status, modelVersion, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        workingCopyId: { type: string, format: uuid }
+        status: { type: string, enum: [queued, running, completed, failed] }
+        modelVersion: { type: string }
+        confidenceFloor: { type: number, format: double }
+        clusterCount: { type: integer, nullable: true }
+        lastError: { type: string, nullable: true, description: "redacted; no secrets" }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+
+    Cluster:
+      type: object
+      required: [id, dedupRunId, workingCopyId, confidence, size, status, members]
+      properties:
+        id: { type: string, format: uuid }
+        dedupRunId: { type: string, format: uuid }
+        workingCopyId: { type: string, format: uuid }
+        confidence: { type: number, format: double, description: "z_maxScore" }
+        minScore: { type: number, format: double, nullable: true, description: "z_minScore" }
+        size: { type: integer, minimum: 2 }
+        status: { type: string, enum: [pending, merged, dismissed, superseded] }
+        mergeRecordId: { type: string, format: uuid, nullable: true }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/ClusterMember" }
+
+    ClusterMember:
+      type: object
+      required: [id, workingCopyContactId, contact]
+      properties:
+        id: { type: string, format: uuid }
+        workingCopyContactId: { type: string, format: uuid }
+        matchScore: { type: number, format: double, nullable: true }
+        isSurvivor: { type: boolean }
+        contact: { $ref: "#/components/schemas/ContactSummary" }
+
+    ContactSummary:
+      description: Read-only display projection of a working-copy contact (raw payload unchanged)
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string, nullable: true }
+        primaryEmail: { type: string, nullable: true }
+        primaryPhone: { type: string, nullable: true }
+        organization: { type: string, nullable: true }
+        status: { type: string, enum: [active, retired] }
+
+    MergePreview:
+      type: object
+      required: [survivorContactId, proposedPayload, conflicts]
+      properties:
+        survivorContactId: { type: string, format: uuid }
+        proposedPayload: { type: object, additionalProperties: true, description: "Person payload" }
+        conflicts:
+          type: array
+          description: Single-value fields where members disagree (operator may override)
+          items:
+            type: object
+            required: [field, chosen, candidates]
+            properties:
+              field: { type: string }
+              chosen: { type: string }
+              candidates:
+                type: array
+                items: { type: string }
+
+    MergeRequest:
+      type: object
+      properties:
+        survivorContactId:
+          type: string
+          format: uuid
+          description: Chosen survivor (default = most complete member if omitted)
+        payloadOverride:
+          type: object
+          additionalProperties: true
+          description: Operator-adjusted merged payload (defaults to the preview's proposedPayload)
+
+    MergeResult:
+      type: object
+      required: [mergeRecordId, survivorContactId, clusterId]
+      properties:
+        mergeRecordId: { type: string, format: uuid }
+        survivorContactId: { type: string, format: uuid }
+        clusterId: { type: string, format: uuid }
+        retiredContactIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }

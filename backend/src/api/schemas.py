@@ -68,3 +68,70 @@ class ContactPage(BaseModel):
 
 class CreateBody(BaseModel):
     label: str | None = None
+
+
+# ---- Deduplication (feature 002) ----------------------------------------------------------
+
+class DedupRunOut(BaseModel):
+    id: uuid.UUID
+    workingCopyId: uuid.UUID
+    status: str
+    modelVersion: str
+    confidenceFloor: float
+    clusterCount: int | None = None
+    lastError: str | None = None
+    createdAt: datetime
+    startedAt: datetime | None = None
+    finishedAt: datetime | None = None
+
+
+class ContactSummaryOut(BaseModel):
+    displayName: str | None = None
+    primaryEmail: str | None = None
+    primaryPhone: str | None = None
+    organization: str | None = None
+    status: str
+
+
+class ClusterMemberOut(BaseModel):
+    id: uuid.UUID
+    workingCopyContactId: uuid.UUID
+    matchScore: float | None = None
+    isSurvivor: bool = False
+    contact: ContactSummaryOut
+
+
+class ClusterOut(BaseModel):
+    id: uuid.UUID
+    dedupRunId: uuid.UUID
+    workingCopyId: uuid.UUID
+    confidence: float
+    minScore: float | None = None
+    size: int
+    status: str
+    mergeRecordId: uuid.UUID | None = None
+    members: list[ClusterMemberOut]
+
+
+class MergeConflict(BaseModel):
+    field: str
+    chosen: str
+    candidates: list[str]
+
+
+class MergePreviewOut(BaseModel):
+    survivorContactId: uuid.UUID
+    proposedPayload: dict
+    conflicts: list[MergeConflict]
+
+
+class MergeRequest(BaseModel):
+    survivorContactId: uuid.UUID | None = None
+    payloadOverride: dict | None = None
+
+
+class MergeResultOut(BaseModel):
+    mergeRecordId: uuid.UUID
+    survivorContactId: uuid.UUID
+    clusterId: uuid.UUID
+    retiredContactIds: list[uuid.UUID]

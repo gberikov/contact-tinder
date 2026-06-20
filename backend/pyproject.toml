@@ -23,6 +23,12 @@ dev = [
     "httpx>=0.27",
     "respx>=0.21",
 ]
+# Spark/Zingg dedup engine. In the `dedup` container these come from the official zingg/zingg
+# image (NOT pip); this group is only for running the engine locally outside that image. Never CI.
+dedup = [
+    "pyspark>=3.5,<3.6",
+    "zingg",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -35,3 +41,8 @@ packages = ["src"]
 pythonpath = ["."]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+# `slow` = real Zingg/Spark + perf tests; excluded from the default lane (no Spark/JVM in CI).
+markers = [
+    "slow: requires Spark/JVM/Zingg or is a performance test (run with -m slow)",
+]
+addopts = "-m 'not slow'"
