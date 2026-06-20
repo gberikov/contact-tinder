@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.api.deps import get_oauth_provider
 from src.api.schemas import AccountOut
+from src.core.config import get_settings
 from src.core.db import get_session
 from src.services import account_service
 from src.services.oauth import OAuthProvider
@@ -49,7 +50,7 @@ def callback(
     result = provider.exchange(code)
     account_service.store_connection(session, result)
     session.commit()
-    return RedirectResponse(url="/accounts", status_code=302)
+    return RedirectResponse(url=f"{get_settings().frontend_url}/accounts", status_code=302)
 
 
 @router.delete("/{account_id}", status_code=204)

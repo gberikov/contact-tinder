@@ -9,7 +9,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: { '/api': 'http://localhost:8000' },
+    // In docker-compose set VITE_API_PROXY_TARGET=http://backend:8000 (service name);
+    // defaults to localhost for running the dev server directly on the host.
+    proxy: { '/api': process.env.VITE_API_PROXY_TARGET || 'http://localhost:8000' },
   },
   test: {
     environment: 'jsdom',

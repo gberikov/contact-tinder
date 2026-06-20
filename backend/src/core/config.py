@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Token encryption at rest (FR-002)
     token_encryption_key: str = ""
 
+    # Where to send the browser back after the OAuth callback completes.
+    frontend_url: str = "http://localhost:5173"
+
     # Import behavior
     import_max_attempts: int = 5
     import_page_size: int = 1000
