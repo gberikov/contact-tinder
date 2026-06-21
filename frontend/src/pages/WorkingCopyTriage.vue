@@ -1,50 +1,53 @@
 <script setup lang="ts">
 import SwipeDeck from '@/components/SwipeDeck.vue';
+import { Button } from '@/components/ui/button';
 import { useTriageStore } from '@/stores/triage';
+import { useWizardStore } from '@/stores/wizard';
+import { ListChecks, Trash2 } from 'lucide-vue-next';
 import { storeToRefs } from 'pinia';
 import { onMounted } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 
 const route = useRoute();
-const workingCopyId = route.params.id as string;
+const wizard = useWizardStore();
+// Driven by the route param on the legacy page, or by the active Draft inside the wizard.
+const workingCopyId = (route.params.id as string) ?? wizard.activeWorkingCopyId ?? '';
 const store = useTriageStore();
+// Start over and Undo now live in the deck's action bar (SwipeDeck); the page keeps the
+// session only to render the sub-flow navigation below.
 const { session } = storeToRefs(store);
 
 onMounted(() => store.open(workingCopyId));
-
-function startOver() {
-  if (window.confirm('Start triage over? This clears all decisions and reverts staged edits.')) {
-    store.reset();
-  }
-}
 </script>
 
 <template>
-  <section>
-    <header class="head">
-      <h2>Swipe triage</h2>
-      <button
-        v-if="session"
-        type="button"
-        class="reset"
-        :disabled="(session.summary.decided ?? 0) === 0"
-        @click="startOver"
-      >
-        ⟲ Start over
-      </button>
-    </header>
+  <section class="space-y-4">
     <SwipeDeck />
-    <nav v-if="session" class="links">
-      <RouterLink :to="`/triage-sessions/${session.id}/processing`">Processing queue</RouterLink>
-      <RouterLink :to="`/working-copies/${workingCopyId}/delete-review`">Review deletions</RouterLink>
-      <RouterLink :to="`/working-copies/${workingCopyId}/export`">Export to Google</RouterLink>
+
+    <nav v-if="session" class="mt-2 grid gap-3 border-t pt-4 sm:grid-cols-2">
+      <Button as-child variant="secondary" class="h-auto justify-start gap-3 px-4 py-3">
+        <RouterLink :to="`/triage-sessions/${session.id}/processing`">
+          <ListChecks class="shrink-0" />
+          <span class="flex flex-col items-start text-left">
+            <span class="font-medium">Processing queue</span>
+            <span class="text-xs font-normal text-muted-foreground">
+              Edit &amp; transliterate queued contacts
+            </span>
+          </span>
+        </RouterLink>
+      </Button>
+      <Button as-child variant="secondary" class="h-auto justify-start gap-3 px-4 py-3">
+        <RouterLink :to="`/working-copies/${workingCopyId}/delete-review`">
+          <Trash2 class="shrink-0" />
+          <span class="flex flex-col items-start text-left">
+            <span class="font-medium">Review deletions</span>
+            <span class="text-xs font-normal text-muted-foreground">
+              Confirm contacts staged to delete
+            </span>
+          </span>
+        </RouterLink>
+      </Button>
     </nav>
   </section>
 </template>
 
-<style scoped>
-.head { display: flex; align-items: center; justify-content: space-between; }
-.reset { padding: 6px 12px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
-.reset:disabled { opacity: 0.4; cursor: default; }
-.links { display: flex; gap: 16px; justify-content: center; margin-top: 24px; }
-</style>

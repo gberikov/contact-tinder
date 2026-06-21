@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import ContactTable from '@/components/ContactTable.vue';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { type Contact, type Snapshot, api } from '@/services/api';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -21,10 +24,10 @@ async function loadContacts() {
   total.value = res.total;
 }
 
-async function createWorkingCopy() {
+async function createDraft() {
   const copy = await api.createWorkingCopy(id);
   if (snapshot.value) snapshot.value.workingCopyCount += 1;
-  router.push('/working-copies');
+  router.push('/wizard/draft');
   return copy;
 }
 
@@ -35,27 +38,21 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section v-if="snapshot">
-    <h2>Snapshot — {{ snapshot.accountEmail }}</h2>
-    <p>
-      <span class="status">{{ snapshot.status }}</span>
-      · {{ snapshot.contactCount ?? '—' }} contacts · {{ snapshot.workingCopyCount }} working copies
+  <section v-if="snapshot" class="mx-auto max-w-4xl space-y-4 p-6">
+    <h2 class="text-lg font-semibold">Backup — {{ snapshot.accountEmail }}</h2>
+    <p class="flex items-center gap-2 text-sm text-muted-foreground">
+      <Badge variant="secondary">{{ snapshot.status }}</Badge>
+      · {{ snapshot.contactCount ?? '—' }} contacts · {{ snapshot.workingCopyCount }} drafts
     </p>
-    <button
-      type="button"
-      :disabled="snapshot.status !== 'complete'"
-      @click="createWorkingCopy"
-    >
-      Create working copy
-    </button>
+    <Button :disabled="snapshot.status !== 'complete'" @click="createDraft">Create draft</Button>
 
-    <div class="search">
-      <input v-model="query" placeholder="Filter by name/email" @keyup.enter="loadContacts" />
-      <button type="button" @click="loadContacts">Search</button>
+    <div class="flex gap-2">
+      <Input v-model="query" placeholder="Filter by name/email" @keyup.enter="loadContacts" />
+      <Button variant="outline" @click="loadContacts">Search</Button>
     </div>
 
-    <p class="readonly-note">This snapshot is read-only.</p>
+    <p class="text-xs text-muted-foreground">This backup is read-only.</p>
     <ContactTable :contacts="contacts" />
-    <p>{{ total }} total</p>
+    <p class="text-sm text-muted-foreground">{{ total }} total</p>
   </section>
 </template>

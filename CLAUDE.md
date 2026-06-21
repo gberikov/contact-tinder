@@ -1,31 +1,32 @@
 <!-- SPECKIT START -->
-## Active feature: 004-google-contacts-export
+## Active feature: 005-ui-redesign-wizard
 
 Read the current implementation plan for technologies, structure, and constraints:
-`specs/004-google-contacts-export/plan.md`
+`specs/005-ui-redesign-wizard/plan.md`
 
 Supporting design artifacts:
-- Spec: `specs/004-google-contacts-export/spec.md`
-- Research: `specs/004-google-contacts-export/research.md`
-- Data model: `specs/004-google-contacts-export/data-model.md`
-- API contract: `specs/004-google-contacts-export/contracts/openapi.yaml`
-- Quickstart: `specs/004-google-contacts-export/quickstart.md`
+- Spec: `specs/005-ui-redesign-wizard/spec.md`
+- Research: `specs/005-ui-redesign-wizard/research.md`
+- Data model: `specs/005-ui-redesign-wizard/data-model.md`
+- UI/state contract: `specs/005-ui-redesign-wizard/contracts/wizard-stepper.md`
+- Quickstart: `specs/005-ui-redesign-wizard/quickstart.md`
 
-Builds on features 001 (snapshots/working copies), 002 (Zingg dedup), and 003 (swipe triage):
-`specs/003-tinder-swipe-triage/plan.md`.
+Builds on features 001–004 (snapshots/working copies, Zingg dedup, swipe triage, Google export).
 
-Stack: Python 3.12 / FastAPI + worker · PostgreSQL · Vue 3 + TS (Vite) · Biome. Feature 004 is the
-**write-to-Google export** that commits the staged triage results on one **Export** screen, run as a
-background job in the existing `worker`: (1) **delete** the `delete`-decided active survivors —
-**reuses 003's** `DeleteBatch`/`DeletionRecord`/`delete_worker`/`PeopleWriteClient` (snapshot →
-preview → explicit confirm → idempotent delete → undo); (2) **label** the Processing-Queue survivors
-(not deleted) with a `Process` Google **contact group** so the operator can filter & re-check them —
-NEW `LabelBatch`/`LabelAssignment` + `ContactLabel`, new `ensure_label`/`add_label_members`/
-`remove_label_members` seam methods (+ CI fake), idempotent & reversible, `404→skipped_absent`. An
-`ExportRun` derives both (disjoint) sets, **warns & excludes** undecided survivors, and reports
-per-action results with undo. Staged edits/transliterations are **NOT** pushed (label only).
-**No new OAuth scope** — `contactGroups` uses the same `…/auth/contacts` grant from 003; the existing
-`account_has_write_scope` gate covers labeling. **No new container** (label batches in `run_all.py`).
-Governing principles: `.specify/memory/constitution.md` (privacy, non-destructive, human-in-loop,
-test-first, auditability).
+Stack: Python 3.12 / FastAPI + worker · PostgreSQL · Vue 3 + TS (Vite) · Biome. Feature 005 is a
+**frontend-only redesign** that wraps the existing pipeline in one guided wizard driven by a
+persistent **Stepper** (`Connect → Backup → Draft → Merge → Review → Export`), built with
+**shadcn-vue** (Mira style, Indigo theme, Tailwind v4 via `@tailwindcss/vite`) and reka-ui. It is a
+**presentation + navigation** change only: NO backend, OAuth, or data-model changes. Step state is
+derived client-side along a **chain of active selections** (active account → backup → draft → its
+merge → review → export) over existing read endpoints in `services/api.ts`; the chain persists in
+localStorage + route (`/wizard/:step`) so reload restores the current step. Renames *working copy →
+**Draft*** and uses plain-verb labels. Adds a distinct **running** state for the three long jobs
+(Backup import, Merge dedup, Export run). All existing safety flows (snapshot, staged delete,
+per-batch confirm, dry-run, undo, undecided warning) are re-presented **unchanged**. UX bar:
+simple · clear · predictable (FR-026–029 / SC-008–010), applying the `frontend-design` skill.
+**Biome stays the single linter/formatter** (constitution); generated `components/ui/**` are
+Biome-formatted and the CI Biome gate stays authoritative. Governing principles:
+`.specify/memory/constitution.md` (privacy, non-destructive, human-in-loop, test-first, auditability).
+Addendum (2026-06-21): the wizard adds account/backup/draft deletion and a passable Review step; draft deletion required a small backend addition (`DELETE /working-copies/{id}` + service-layer cascade), a knowing exception to the otherwise frontend-only scope. See `specs/005-ui-redesign-wizard/addendum-deletions-and-passable-review.md`.
 <!-- SPECKIT END -->

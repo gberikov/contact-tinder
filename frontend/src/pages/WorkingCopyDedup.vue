@@ -1,37 +1,36 @@
 <script setup lang="ts">
-import ClusterList from '@/components/ClusterList.vue';
 import DedupRunPanel from '@/components/DedupRunPanel.vue';
+import MergeDeck from '@/components/MergeDeck.vue';
 import { useDedupStore } from '@/stores/dedup';
+import { useWizardStore } from '@/stores/wizard';
 import { storeToRefs } from 'pinia';
-import { RouterLink, useRoute } from 'vue-router';
+import { onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 
 const route = useRoute();
-const workingCopyId = route.params.id as string;
+const wizard = useWizardStore();
+// Driven by the route param on the legacy page, or by the active Draft inside the wizard.
+const workingCopyId = (route.params.id as string) ?? wizard.activeWorkingCopyId ?? '';
 const store = useDedupStore();
-const { pendingClusters } = storeToRefs(store);
+const { run } = storeToRefs(store);
 
-async function onMerge(clusterId: string, survivorId: string) {
-  await store.merge(clusterId, survivorId);
+// Re-derive Merge completion from the wizard's own run list so Continue unlocks.
+async function refreshWizard() {
+  await wizard.loadMerge();
 }
-async function onDismiss(clusterId: string) {
-  await store.dismiss(clusterId);
-}
+
+// Re-entering the step: restore the latest completed run + its clusters into the deck.
+onMounted(async () => {
+  if (store.run) return;
+  if (!wizard.dedupRuns.length) await wizard.loadMerge();
+  const latest = wizard.latestDedupRun;
+  if (latest) await store.adopt(latest);
+});
 </script>
 
 <template>
-  <section>
-    <h2>Deduplicate working copy</h2>
-    <DedupRunPanel :working-copy-id="workingCopyId" />
-    <ClusterList :clusters="pendingClusters" @merge="onMerge" @dismiss="onDismiss" />
-    <p class="next">
-      Done deduplicating?
-      <RouterLink :to="`/working-copies/${workingCopyId}/triage`">Start triage →</RouterLink>
-    </p>
+  <section class="space-y-6">
+    <DedupRunPanel :working-copy-id="workingCopyId" @done="refreshWizard" />
+    <MergeDeck v-if="run" @change="refreshWizard" />
   </section>
 </template>
-
-<style scoped>
-.next {
-  margin-top: 1.5rem;
-}
-</style>

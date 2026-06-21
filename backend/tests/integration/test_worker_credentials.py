@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from src.workers import delete_worker, label_worker
+from src.workers import delete_worker, import_worker, label_worker
 from tests.helpers import seed_account
 
 
@@ -38,4 +38,13 @@ def test_label_worker_credentials_can_refresh(db, monkeypatch):
     account = seed_account(db)
     monkeypatch.setattr(label_worker, "get_settings", _google_settings)
     client = label_worker.build_write_client(db, SimpleNamespace(account_id=account.id))
+    _assert_refreshable(client._credentials)
+
+
+def test_import_worker_credentials_can_refresh(db, monkeypatch):
+    # Read path: the import worker's People client must also carry refreshable credentials,
+    # otherwise a token that expires mid-import raises RefreshError and the import stalls.
+    account = seed_account(db)
+    monkeypatch.setattr(import_worker, "get_settings", _google_settings)
+    client = import_worker.build_client(db, SimpleNamespace(account_id=account.id))
     _assert_refreshable(client._credentials)

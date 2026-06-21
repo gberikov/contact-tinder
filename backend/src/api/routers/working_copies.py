@@ -48,3 +48,12 @@ def list_contacts(
         for c in rows
     ]
     return ContactPage(items=items, page=page, pageSize=pageSize, total=total)
+
+
+@router.delete("/{working_copy_id}", status_code=204)
+def delete_working_copy(
+    working_copy_id: uuid.UUID,
+    confirm: bool = Query(...),
+    session: Session = Depends(get_session),
+) -> None:
+    working_copy_service.delete_working_copy(session, working_copy_id, confirm=confirm)

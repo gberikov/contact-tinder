@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import type { TransliterationSuggestion } from '@/services/api';
 import { reactive } from 'vue';
 
@@ -10,19 +12,16 @@ const fields = reactive<Record<string, string>>({ ...props.suggestion.fields });
 </script>
 
 <template>
-  <div class="translit">
-    <p v-if="!suggestion.hasSuggestion">No transliteration suggested.</p>
+  <div class="space-y-2 rounded-lg border bg-muted/30 p-3">
+    <p v-if="!suggestion.hasSuggestion" class="text-sm text-muted-foreground">
+      No transliteration suggested.
+    </p>
     <template v-else>
-      <div v-for="(_, key) in fields" :key="key" class="row">
-        <label>{{ key }}</label>
-        <input v-model="fields[key]" type="text" />
+      <div v-for="(_, key) in fields" :key="key" class="flex items-center gap-2">
+        <label class="w-28 text-sm text-muted-foreground">{{ key }}</label>
+        <Input v-model="fields[key]" type="text" />
       </div>
-      <button type="button" @click="emit('accept', { ...fields })">Accept Cyrillic</button>
+      <Button size="sm" @click="emit('accept', { ...fields })">Accept Cyrillic</Button>
     </template>
   </div>
 </template>
-
-<style scoped>
-.row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
-label { width: 110px; color: #666; }
-</style>

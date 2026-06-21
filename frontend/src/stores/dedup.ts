@@ -25,6 +25,12 @@ export const useDedupStore = defineStore('dedup', {
         .sort((a, b) => b.confidence - a.confidence),
   },
   actions: {
+    /** Restore an existing run (e.g. when re-entering the Merge step) and load its clusters. */
+    async adopt(run: DedupRun) {
+      if (this.run?.id === run.id) return;
+      this.run = run;
+      if (run.status === 'completed') await this.loadClusters();
+    },
     async startRun(workingCopyId: string) {
       this.loading = true;
       this.error = null;

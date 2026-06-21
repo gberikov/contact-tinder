@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button } from '@/components/ui/button';
 import type { ExportReport, ExportRun } from '@/services/api';
 
 defineProps<{
@@ -11,9 +12,11 @@ const emit = defineEmits<{ (e: 'undo-delete'): void; (e: 'undo-label'): void }>(
 </script>
 
 <template>
-  <div class="export-report">
-    <h3>Export report — <span class="status">{{ run.status }}</span></h3>
-    <ul class="counts">
+  <div class="space-y-3">
+    <h3 class="font-medium">
+      Export report — <span class="font-semibold uppercase">{{ run.status }}</span>
+    </h3>
+    <ul class="grid grid-cols-2 gap-1 text-sm text-muted-foreground">
       <li>Deleted: {{ report.deleted }}</li>
       <li>Already gone (delete): {{ report.skippedAbsentDelete }}</li>
       <li>Labeled: {{ report.labeled }}</li>
@@ -21,19 +24,13 @@ const emit = defineEmits<{ (e: 'undo-delete'): void; (e: 'undo-label'): void }>(
       <li>Failed: {{ report.failed }}</li>
       <li>Excluded: {{ report.excluded }}</li>
     </ul>
-    <div class="actions">
-      <button type="button" :disabled="!canUndoDelete" @click="emit('undo-delete')">
+    <div class="flex gap-3">
+      <Button variant="outline" size="sm" :disabled="!canUndoDelete" @click="emit('undo-delete')">
         Undo deletions
-      </button>
-      <button type="button" :disabled="!canUndoLabel" @click="emit('undo-label')">
+      </Button>
+      <Button variant="outline" size="sm" :disabled="!canUndoLabel" @click="emit('undo-label')">
         Remove “Process” label
-      </button>
+      </Button>
     </div>
   </div>
 </template>
-
-<style scoped>
-.counts { list-style: none; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.status { text-transform: uppercase; font-weight: 600; }
-.actions { display: flex; gap: 12px; margin-top: 12px; }
-</style>

@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { Button } from '@/components/ui/button';
+import { Check, Pencil, X } from 'lucide-vue-next';
+
+defineProps<{ disabled?: boolean }>();
+
 const emit = defineEmits<{
   (e: 'keep'): void;
   (e: 'delete'): void;
@@ -7,17 +12,44 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="controls">
-    <button type="button" class="del" @click="emit('delete')">✗ Delete</button>
-    <button type="button" class="proc" @click="emit('process')">✎ Process</button>
-    <button type="button" class="keep" @click="emit('keep')">✓ Keep</button>
+  <div
+    class="flex items-start gap-2 text-center [&_kbd]:rounded [&_kbd]:border [&_kbd]:bg-muted [&_kbd]:px-1.5 [&_kbd]:py-0.5"
+  >
+    <div class="flex flex-col items-center gap-1.5">
+      <Button
+        type="button"
+        variant="destructive"
+        class="rounded-full"
+        :disabled="disabled"
+        @click="emit('delete')"
+      >
+        <X /> Delete
+      </Button>
+      <span class="text-xs text-muted-foreground"><kbd>←</kbd> / <kbd>D</kbd></span>
+    </div>
+
+    <div class="flex flex-col items-center gap-1.5">
+      <Button
+        type="button"
+        class="rounded-full bg-blue-600 text-white shadow hover:bg-blue-700 focus-visible:ring-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600"
+        :disabled="disabled"
+        @click="emit('process')"
+      >
+        <Pencil /> Process
+      </Button>
+      <span class="text-xs text-muted-foreground"><kbd>↑</kbd> / <kbd>P</kbd></span>
+    </div>
+
+    <div class="flex flex-col items-center gap-1.5">
+      <Button
+        type="button"
+        class="rounded-full bg-green-600 text-white shadow hover:bg-green-700 focus-visible:ring-green-600 dark:bg-green-500 dark:hover:bg-green-600"
+        :disabled="disabled"
+        @click="emit('keep')"
+      >
+        <Check /> Keep
+      </Button>
+      <span class="text-xs text-muted-foreground"><kbd>→</kbd> / <kbd>K</kbd></span>
+    </div>
   </div>
 </template>
-
-<style scoped>
-.controls { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
-button { padding: 10px 18px; border-radius: 999px; border: 1px solid #ccc; cursor: pointer; font-size: 15px; }
-.keep { background: #e6f4ea; border-color: #34a853; }
-.del { background: #fce8e6; border-color: #ea4335; }
-.proc { background: #fef7e0; border-color: #f9ab00; }
-</style>
