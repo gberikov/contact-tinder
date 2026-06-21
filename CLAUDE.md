@@ -28,4 +28,5 @@ simple · clear · predictable (FR-026–029 / SC-008–010), applying the `fron
 **Biome stays the single linter/formatter** (constitution); generated `components/ui/**` are
 Biome-formatted and the CI Biome gate stays authoritative. Governing principles:
 `.specify/memory/constitution.md` (privacy, non-destructive, human-in-loop, test-first, auditability).
+Addendum (2026-06-21): the wizard adds account/backup/draft deletion and a passable Review step; draft deletion required a small backend addition (`DELETE /working-copies/{id}` + service-layer cascade), a knowing exception to the otherwise frontend-only scope. See `specs/005-ui-redesign-wizard/addendum-deletions-and-passable-review.md`.
 <!-- SPECKIT END -->

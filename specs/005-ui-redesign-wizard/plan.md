@@ -31,7 +31,7 @@ no new server-side persistence.
 
 **Target Platform**: Modern evergreen browsers (desktop + small/mobile viewports)
 
-**Project Type**: Web application — frontend-only change (existing FastAPI backend untouched)
+**Project Type**: Web application — frontend-only change (existing FastAPI backend untouched; addendum: draft deletion added `DELETE /working-copies/{id}` + service-layer cascade — see `addendum-deletions-and-passable-review.md`)
 
 **Performance Goals**: No regression; wizard transitions feel instant (<100ms perceived); existing
 job-polling cadences (e.g. export poll 500ms) preserved
