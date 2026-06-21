@@ -1,32 +1,37 @@
 <!-- SPECKIT START -->
-## Active feature: 005-ui-redesign-wizard
+## Active feature: 006-validate-normalize
 
 Read the current implementation plan for technologies, structure, and constraints:
-`specs/005-ui-redesign-wizard/plan.md`
+`specs/006-validate-normalize/plan.md`
 
 Supporting design artifacts:
-- Spec: `specs/005-ui-redesign-wizard/spec.md`
-- Research: `specs/005-ui-redesign-wizard/research.md`
-- Data model: `specs/005-ui-redesign-wizard/data-model.md`
-- UI/state contract: `specs/005-ui-redesign-wizard/contracts/wizard-stepper.md`
-- Quickstart: `specs/005-ui-redesign-wizard/quickstart.md`
+- Spec: `specs/006-validate-normalize/spec.md`
+- Research: `specs/006-validate-normalize/research.md`
+- Data model: `specs/006-validate-normalize/data-model.md`
+- HTTP contract: `specs/006-validate-normalize/contracts/validation-api.md`
+- Quickstart: `specs/006-validate-normalize/quickstart.md`
 
-Builds on features 001–004 (snapshots/working copies, Zingg dedup, swipe triage, Google export).
+Builds on features 001–005 (snapshots/drafts, Zingg dedup, swipe triage, Google export, guided wizard).
 
-Stack: Python 3.12 / FastAPI + worker · PostgreSQL · Vue 3 + TS (Vite) · Biome. Feature 005 is a
-**frontend-only redesign** that wraps the existing pipeline in one guided wizard driven by a
-persistent **Stepper** (`Connect → Backup → Draft → Merge → Review → Export`), built with
-**shadcn-vue** (Mira style, Indigo theme, Tailwind v4 via `@tailwindcss/vite`) and reka-ui. It is a
-**presentation + navigation** change only: NO backend, OAuth, or data-model changes. Step state is
-derived client-side along a **chain of active selections** (active account → backup → draft → its
-merge → review → export) over existing read endpoints in `services/api.ts`; the chain persists in
-localStorage + route (`/wizard/:step`) so reload restores the current step. Renames *working copy →
-**Draft*** and uses plain-verb labels. Adds a distinct **running** state for the three long jobs
-(Backup import, Merge dedup, Export run). All existing safety flows (snapshot, staged delete,
-per-batch confirm, dry-run, undo, undecided warning) are re-presented **unchanged**. UX bar:
-simple · clear · predictable (FR-026–029 / SC-008–010), applying the `frontend-design` skill.
-**Biome stays the single linter/formatter** (constitution); generated `components/ui/**` are
-Biome-formatted and the CI Biome gate stays authoritative. Governing principles:
-`.specify/memory/constitution.md` (privacy, non-destructive, human-in-loop, test-first, auditability).
-Addendum (2026-06-21): the wizard adds account/backup/draft deletion and a passable Review step; draft deletion required a small backend addition (`DELETE /working-copies/{id}` + service-layer cascade), a knowing exception to the otherwise frontend-only scope. See `specs/005-ui-redesign-wizard/addendum-deletions-and-passable-review.md`.
+Stack: Python 3.12 / FastAPI + worker · PostgreSQL · Vue 3 + TS (Vite) · Biome. Feature 006 adds a
+**seventh wizard step, Tidy**, between **Review** and **Export**, that validates & normalizes the
+active Draft's **kept** contacts. A background **ValidationRun** (combined worker, `FOR UPDATE SKIP
+LOCKED`) **auto-applies** unambiguous fixes as reversible **StagedEdits** on the Draft — phone →
+E.164, confident-mobile type, `http→https` when the https site is reachable — and **queues**
+everything uncertain/broken as **ValidationItem** rows (invalid phone, unclear type, invalid email,
+dead email domain via MX, unreachable website, SSRF-unsafe website) for explicit human resolution.
+Libraries: `phonenumbers` (E.164 + type), `email-validator`/`dnspython` (syntax + MX; **no SMTP
+probe**), `httpx` (reachability = any HTTP response; transport failure = queue) with a **per-redirect
+SSRF guard** rejecting non-public IPs. Email depth = syntax + MX only. Default phone region is a
+client-side setting (localStorage), initialized via `GET /settings/detect-region` (local GeoLite2 or
+browser-locale fallback) and **highlighted** in the UI. The step shows a **running** state and is
+**passable with a warning**. One migration (`0005_validate_normalize` → `validation_run`,
+`validation_item`); `StagedEdit.kind` widened to include `normalize` (no DDL). Reuses StagedEdit/undo/
+audit (003) and the running-state pattern (002/004/005); **no Google push, no new OAuth scope** —
+edits reach Google only via the unchanged Export step. This **knowingly extends beyond 005's
+frontend-only scope** (new Python deps + migration + worker + router), a scoped exception like the
+005 deletion addendum — adding libraries is **not** a constitutional amendment (no new core
+technology). Governing principles: `.specify/memory/constitution.md` (privacy, non-destructive,
+human-in-loop, test-first, auditability). **Biome stays the single frontend linter/formatter**; CI
+Biome + `vue-tsc` gates stay authoritative.
 <!-- SPECKIT END -->
