@@ -144,6 +144,15 @@ of the others.
 - **FR-A13** Export's existing undecided-contacts warning (`UndecidedWarning` / `undecidedCount`) is
   the safety net for proceeding with incomplete triage and is unchanged.
 
+## Known limitations / follow-ups
+
+The account → snapshot → draft cascade is **not atomic across its per-service commits**. Each level
+(`account_service` → `snapshot_service` → `working_copy_service`) commits independently, so a
+mid-cascade failure (e.g. process crash after snapshots are gone but before the account row is
+deleted) can leave a partially-deleted subtree. This is **accepted** for the current single-operator
+tool where N is small and the operator can manually clean up via the UI; making subtree deletion
+fully atomic (a single outer transaction wrapping the whole cascade) is a tracked follow-up.
+
 ## Non-Goals
 
 - No undo/restore for deletions beyond what already exists downstream — a deleted account, backup, or

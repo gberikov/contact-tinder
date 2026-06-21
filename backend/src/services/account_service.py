@@ -60,6 +60,8 @@ def disconnect(session: Session, account_id: uuid.UUID) -> None:
     from src.models.snapshot import Snapshot
     from src.services import snapshot_service
 
+    # NOTE: cascade commits per child (per existing pattern), so a mid-cascade failure can leave a
+    # partially-deleted subtree. Accepted for this single-operator tool; atomic-subtree delete is a follow-up.
     for sid in session.scalars(
         select(Snapshot.id).where(Snapshot.account_id == account_id)
     ).all():

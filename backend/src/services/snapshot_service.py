@@ -123,8 +123,6 @@ def delete_snapshot(session: Session, snapshot_id: uuid.UUID, *, confirm: bool) 
         working_copy_service.delete_working_copy(session, wc, confirm=True)
 
     snapshot = get_snapshot(session, snapshot_id)  # re-fetch after child commits
-    snapshot.status = "deleting"
-    session.flush()
     audit_service.record(
         session,
         action="snapshot.deleted",
