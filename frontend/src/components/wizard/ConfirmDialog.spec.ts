@@ -1,12 +1,14 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
-import { nextTick } from 'vue';
+import { defineComponent, nextTick, ref } from 'vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 
-// Regression: the AlertDialog wrapper must forward reka-ui's `update:open` emit so a controlled
-// dialog actually closes — both the Cancel button and the destructive Action render reka-ui's
-// DialogClose, which closes via `update:open(false)`. A wrapper that drops that emit leaves the
-// buttons looking dead (the dialog never closes). See AlertDialog.vue's useForwardPropsEmits.
+function findButton(label: string): HTMLButtonElement | undefined {
+  return Array.from(document.querySelectorAll('button')).find((b) =>
+    b.textContent?.includes(label),
+  ) as HTMLButtonElement | undefined;
+}
+
 describe('ConfirmDialog', () => {
   function open(props: Record<string, unknown> = {}) {
     return mount(ConfirmDialog, {
@@ -15,13 +17,7 @@ describe('ConfirmDialog', () => {
     });
   }
 
-  function findButton(label: string): HTMLButtonElement | undefined {
-    return Array.from(document.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes(label),
-    ) as HTMLButtonElement | undefined;
-  }
-
-  it('emits confirm and update:open(false) when the action button is clicked', async () => {
+  it('emits confirm when the action button is clicked', async () => {
     const wrapper = open({ confirmText: 'Delete it' });
     await nextTick();
     await nextTick();
@@ -30,7 +26,6 @@ describe('ConfirmDialog', () => {
     await nextTick();
 
     expect(wrapper.emitted('confirm')).toBeTruthy();
-    expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false]);
     wrapper.unmount();
   });
 
@@ -45,5 +40,39 @@ describe('ConfirmDialog', () => {
     expect(wrapper.emitted('update:open')?.at(-1)).toEqual([false]);
     expect(wrapper.emitted('confirm')).toBeFalsy();
     wrapper.unmount();
+  });
+
+  // Regression: the destructive action must NOT also close the dialog via reka's DialogClose.
+  // It did, and reka emits update:open BEFORE confirm — so the parent's `@update:open` handler
+  // (which clears the pending target) ran first and confirmDelete then saw a null target and
+  // bailed: clicking Delete deleted nothing and fired no request. The confirm handler must still
+  // see the pending target intact.
+  it('delivers confirm with the pending target intact (no update:open race)', async () => {
+    const captured: string[] = [];
+    const Harness = defineComponent({
+      components: { ConfirmDialog },
+      setup() {
+        const pending = ref<{ id: string } | null>({ id: 'target-1' });
+        function onConfirm() {
+          if (pending.value) captured.push(pending.value.id);
+          pending.value = null;
+        }
+        function onUpdateOpen(v: boolean) {
+          if (!v) pending.value = null;
+        }
+        return { pending, onConfirm, onUpdateOpen };
+      },
+      template: `<ConfirmDialog :open="pending !== null" title="t" description="d"
+        @update:open="onUpdateOpen" @confirm="onConfirm" />`,
+    });
+
+    mount(Harness, { attachTo: document.body });
+    await nextTick();
+    await nextTick();
+
+    findButton('Delete')?.click();
+    await nextTick();
+
+    expect(captured).toEqual(['target-1']);
   });
 });

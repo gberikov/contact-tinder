@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -9,8 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 defineProps<{
   open: boolean;
@@ -34,12 +32,12 @@ const emit = defineEmits<{
       </AlertDialogHeader>
       <AlertDialogFooter>
         <AlertDialogCancel>Cancel</AlertDialogCancel>
-        <AlertDialogAction
-          :class="cn(buttonVariants({ variant: 'destructive' }))"
-          @click="emit('confirm')"
-        >
+        <!-- Plain Button, NOT AlertDialogAction: the latter is a reka DialogClose that ALSO emits
+             update:open(false), which races ahead of `confirm` and clears the caller's pending
+             target before it runs. The caller closes the dialog itself after handling confirm. -->
+        <Button variant="destructive" @click="emit('confirm')">
           {{ confirmText ?? 'Delete' }}
-        </AlertDialogAction>
+        </Button>
       </AlertDialogFooter>
     </AlertDialogContent>
   </AlertDialog>
