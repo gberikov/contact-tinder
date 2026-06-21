@@ -12,6 +12,7 @@ const { run, region, loading, error } = storeToRefs(store);
 
 const isRunning = computed(() => store.isRunning);
 const summary = computed(() => store.summary);
+const progressPct = computed(() => store.progressPct);
 
 function onRegionInput(e: Event) {
   const v = (e.target as HTMLInputElement).value.toUpperCase().slice(0, 2);
@@ -49,8 +50,6 @@ async function start() {
         <template v-else>Run check</template>
       </Button>
 
-      <Badge v-if="isRunning" variant="secondary">Running…</Badge>
-
       <template v-if="summary && run?.status === 'completed'">
         <Badge variant="secondary">Auto-fixed {{ summary.auto }}</Badge>
         <Badge variant="secondary">To review {{ summary.pending }}</Badge>
@@ -61,6 +60,20 @@ async function start() {
         {{ error ?? run?.lastError ?? 'Check failed' }}
         <Button variant="outline" size="sm" class="ml-2" @click="start">Retry</Button>
       </span>
+    </div>
+
+    <!-- Live progress while the run works through the kept set's phones/emails/websites. -->
+    <div v-if="isRunning && summary" class="space-y-1">
+      <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          class="h-full rounded-full bg-primary transition-[width] duration-500"
+          :style="{ width: `${progressPct}%` }"
+        />
+      </div>
+      <p class="text-xs text-muted-foreground">
+        Checking websites & contacts… {{ summary.checked }} / {{ summary.total }} ({{ progressPct }}%)
+        · auto-fixed {{ summary.auto }} · to review {{ summary.queued }}
+      </p>
     </div>
   </div>
 </template>

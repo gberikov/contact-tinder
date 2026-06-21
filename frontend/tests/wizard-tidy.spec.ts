@@ -7,6 +7,7 @@ const run = (over: Partial<ValidationRun> = {}): ValidationRun => ({
   id: 'r1',
   workingCopyId: 'wc-1',
   status: 'completed',
+  totalCount: 0,
   checkedCount: 0,
   autoAppliedCount: 0,
   queuedCount: 0,

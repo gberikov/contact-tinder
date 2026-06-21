@@ -42,12 +42,19 @@ export const useTidyStore = defineStore('tidy', {
     summary: (s) =>
       s.run
         ? {
+            total: s.run.totalCount,
             checked: s.run.checkedCount,
             auto: s.run.autoAppliedCount,
             queued: s.run.queuedCount,
             pending: s.run.pendingCount,
           }
         : null,
+    // 0–100 progress while the run works through the kept set's field values.
+    progressPct: (s): number => {
+      const r = s.run;
+      if (!r || r.totalCount <= 0) return r?.status === 'completed' ? 100 : 0;
+      return Math.min(100, Math.round((r.checkedCount / r.totalCount) * 100));
+    },
   },
 
   actions: {

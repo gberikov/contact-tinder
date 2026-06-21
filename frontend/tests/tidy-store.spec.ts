@@ -22,6 +22,7 @@ const run = (over: Partial<ValidationRun> = {}): ValidationRun => ({
   workingCopyId: 'wc-1',
   status: 'completed',
   defaultRegion: 'KZ',
+  totalCount: 5,
   checkedCount: 5,
   autoAppliedCount: 3,
   queuedCount: 2,
@@ -61,8 +62,18 @@ describe('tidy store', () => {
 
     expect(api.startValidationRun).toHaveBeenCalledWith('wc-1', 'KZ', undefined);
     expect(store.run?.status).toBe('completed');
-    expect(store.summary).toEqual({ checked: 5, auto: 3, queued: 2, pending: 2 });
+    expect(store.summary).toEqual({ total: 5, checked: 5, auto: 3, queued: 2, pending: 2 });
     expect(store.pendingItems).toHaveLength(1);
+  });
+
+  it('computes progress percent from checked/total', () => {
+    const store = useTidyStore();
+    store.run = run({ status: 'running', totalCount: 200, checkedCount: 50 });
+    expect(store.progressPct).toBe(25);
+    store.run = run({ status: 'queued', totalCount: 0, checkedCount: 0 });
+    expect(store.progressPct).toBe(0);
+    store.run = run({ status: 'completed', totalCount: 0, checkedCount: 0 });
+    expect(store.progressPct).toBe(100);
   });
 
   it('undoes a staged edit via undoStagedEdit (FR-022)', async () => {

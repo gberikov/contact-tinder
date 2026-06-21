@@ -272,6 +272,7 @@ export interface ValidationRun {
   sessionId?: string | null;
   status: 'queued' | 'running' | 'completed' | 'failed';
   defaultRegion?: string | null;
+  totalCount: number;
   checkedCount: number;
   autoAppliedCount: number;
   queuedCount: number;

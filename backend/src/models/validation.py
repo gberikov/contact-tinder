@@ -47,6 +47,8 @@ class ValidationRun(Base):
     status: Mapped[str] = mapped_column(String(16), default="queued", nullable=False)
     # ISO-3166 alpha-2 used to parse national-format phones (research D2); +E.164 ignores it.
     default_region: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    # Progress-bar denominator: total field values to check (same unit as checked_count).
+    total_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     checked_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     auto_applied_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     queued_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

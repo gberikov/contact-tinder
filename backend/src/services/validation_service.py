@@ -192,15 +192,24 @@ def _to_https(value: str) -> str:
 def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=None) -> ValidationRun:
     website_check = website_check or website_checker.check
     run = get_run(session, run_id)
+    region = run.default_region or get_settings().phone_default_region
+    kept = _kept_contacts(session, run)
+    # Progress denominator: total field values to check (same unit as checked_count).
+    total = sum(
+        len(c.payload.get("phoneNumbers", []) or [])
+        + len(c.payload.get("emailAddresses", []) or [])
+        + len(c.payload.get("urls", []) or [])
+        for c in kept
+    )
     run.status = "running"
     run.started_at = _now()
-    session.commit()  # publish `running` immediately so the UI reflects it and the long pass below
-    session.refresh(run)  # doesn't hold one giant transaction open across hundreds of network checks
-    region = run.default_region or get_settings().phone_default_region
+    run.total_count = total
+    session.commit()  # publish `running` + total immediately so the UI's progress bar can render
+    session.refresh(run)
 
     checked = auto = queued = 0
     try:
-        for contact in _kept_contacts(session, run):
+        for processed, contact in enumerate(kept, start=1):
             payload = contact.payload  # original snapshot of values/indices (stable across staging)
 
             for idx, entry in enumerate(payload.get("phoneNumbers", []) or []):
@@ -256,6 +265,14 @@ def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=Non
                     np["urls"][idx]["value"] = _to_https(value)
                     _stage(session, contact, np, action="contact.normalized", kind="normalize")
                     auto += 1
+
+            # Publish progress every 20 contacts so the UI's bar advances live (and the long pass
+            # never holds one giant transaction open across hundreds of network checks).
+            if processed % 20 == 0:
+                run.checked_count = checked
+                run.auto_applied_count = auto
+                run.queued_count = queued
+                session.commit()
 
         run.checked_count = checked
         run.auto_applied_count = auto
@@ -380,6 +397,7 @@ def run_out(session: Session, run: ValidationRun) -> dict:
         "sessionId": run.session_id,
         "status": run.status,
         "defaultRegion": run.default_region,
+        "totalCount": run.total_count,
         "checkedCount": run.checked_count,
         "autoAppliedCount": run.auto_applied_count,
         "queuedCount": run.queued_count,

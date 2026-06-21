@@ -326,6 +326,7 @@ class ValidationRunOut(BaseModel):
     sessionId: uuid.UUID | None = None
     status: str
     defaultRegion: str | None = None
+    totalCount: int
     checkedCount: int
     autoAppliedCount: int
     queuedCount: int
