@@ -91,4 +91,21 @@ describe('wizard running state for long jobs (FR-025)', () => {
     store.dedupRuns = [{ status: 'running' } as DedupRun];
     expect(store.displayState('merge')).toBe('running');
   });
+
+  it('computes Backup progress (fetched / total / percent)', () => {
+    const store = chain();
+    store.importJob = {
+      snapshotId: 's1',
+      status: 'running',
+      fetchedCount: 230,
+      totalEstimate: 2475,
+    } as ImportJob;
+    expect(store.backupProgress).toEqual({ fetched: 230, total: 2475, pct: 9 });
+  });
+
+  it('reports indeterminate Backup progress when total is unknown', () => {
+    const store = chain();
+    store.importJob = { snapshotId: 's1', status: 'running', fetchedCount: 50 } as ImportJob;
+    expect(store.backupProgress).toEqual({ fetched: 50, total: null, pct: null });
+  });
 });

@@ -44,6 +44,7 @@ interface State extends PersistedChain {
   exportRun: ExportRun | null;
   loading: boolean;
   error: string | null;
+  backupPolling: boolean;
 }
 
 function loadPersisted(): PersistedChain {
@@ -75,6 +76,7 @@ export const useWizardStore = defineStore('wizard', {
     exportRun: null,
     loading: false,
     error: null,
+    backupPolling: false,
   }),
 
   getters: {
@@ -113,6 +115,16 @@ export const useWizardStore = defineStore('wizard', {
       return state.triageSessions.length
         ? state.triageSessions[state.triageSessions.length - 1]
         : null;
+    },
+
+    /** Live Backup import progress: fetched/total + percent (null total ⇒ indeterminate). */
+    backupProgress(state): { fetched: number; total: number | null; pct: number | null } | null {
+      const job = state.importJob;
+      if (!job) return null;
+      const fetched = job.fetchedCount ?? 0;
+      const total = job.totalEstimate ?? null;
+      const pct = total && total > 0 ? Math.min(100, Math.round((fetched / total) * 100)) : null;
+      return { fetched, total, pct };
     },
 
     // ---- per-step predicates (data-model.md mapping) -----------------------------------------
@@ -250,6 +262,25 @@ export const useWizardStore = defineStore('wizard', {
     async loadBackupJob() {
       const sid = this.activeSnapshotId;
       this.importJob = sid ? await api.getImportJob(sid) : null;
+    },
+    /** Poll the active Backup's import job (~1s) until it finishes; refresh snapshots on completion. */
+    async pollBackupJob(intervalMs = 1200, maxTicks = 600) {
+      if (this.backupPolling || !this.activeSnapshotId) return;
+      this.backupPolling = true;
+      try {
+        for (let i = 0; i < maxTicks; i++) {
+          await this.loadBackupJob();
+          const status = this.importJob?.status;
+          if (status === 'completed') {
+            await this.loadSnapshots(); // snapshot flips importing → complete
+            break;
+          }
+          if (status === 'failed' || status == null) break;
+          await new Promise((r) => setTimeout(r, intervalMs));
+        }
+      } finally {
+        this.backupPolling = false;
+      }
     },
     async loadMerge() {
       const wid = this.activeWorkingCopyId;

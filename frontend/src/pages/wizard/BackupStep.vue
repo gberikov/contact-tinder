@@ -5,7 +5,7 @@ import ActiveSelector from '@/components/wizard/ActiveSelector.vue';
 import type { SelectorItem } from '@/components/wizard/types';
 import { api } from '@/services/api';
 import { useWizardStore } from '@/stores/wizard';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 const wizard = useWizardStore();
 const label = ref('');
@@ -23,6 +23,16 @@ const items = computed<SelectorItem[]>(() =>
   })),
 );
 
+const importing = computed(() => wizard.running('backup'));
+const progress = computed(() => wizard.backupProgress);
+
+// Start polling whenever the active backup is still importing (on entry or after switching).
+function maybePoll() {
+  if (importing.value) wizard.pollBackupJob();
+}
+onMounted(maybePoll);
+watch(() => wizard.activeSnapshotId, maybePoll);
+
 async function createBackup() {
   if (!wizard.activeAccountId) return;
   creating.value = true;
@@ -32,6 +42,7 @@ async function createBackup() {
     await wizard.loadSnapshots();
     wizard.setActiveSnapshot(snap.id);
     label.value = '';
+    wizard.pollBackupJob(); // live progress for the fresh import
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -53,6 +64,26 @@ function select(id: string) {
       empty-text="No backups yet — create one to freeze your contacts."
       @select="select"
     />
+
+    <!-- Live import progress (FR-029): "230 / 2475 (9%)" + bar -->
+    <div v-if="importing && progress" class="space-y-1.5">
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-muted-foreground">Loading contacts from Google…</span>
+        <span class="tabular-nums font-medium">
+          {{ progress.fetched.toLocaleString() }}<template v-if="progress.total">
+            / {{ progress.total.toLocaleString() }}</template>
+          <template v-if="progress.pct != null"> ({{ progress.pct }}%)</template>
+        </span>
+      </div>
+      <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          class="h-full rounded-full bg-primary transition-all duration-500"
+          :class="progress.pct == null ? 'w-2/5 animate-pulse' : ''"
+          :style="progress.pct != null ? { width: `${progress.pct}%` } : undefined"
+        />
+      </div>
+    </div>
+
     <div class="flex items-end gap-2">
       <div class="flex-1 space-y-1">
         <label class="text-xs font-medium text-muted-foreground" for="backup-label">
