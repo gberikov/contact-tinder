@@ -46,6 +46,10 @@ Index: `ix_validation_run_copy_status (working_copy_id, status)` — latest-run 
 (mirrors `ix_export_run_copy_status`). Relationship: `items` → `ValidationItem` (cascade
 all, delete-orphan).
 
+**Derived (not stored)**: `ValidationRunOut.pendingCount` = live
+`COUNT(validation_item WHERE status='pending')`, computed at serialization time. `queued_count` (the
+total items the run created) **is** stored; `pendingCount` shrinks as items are resolved/skipped.
+
 **Kept set**: contacts in `working_copy_id` whose latest `TriageDecision.outcome != 'delete'` for
 `session_id` (i.e. `keep`/`process`, or no decision = survivor). Excludes deletions (FR-006).
 
@@ -112,14 +116,16 @@ item may be re-resolved.
 
 | Step | Active artifact | API used | `completed` predicate | `running` predicate |
 |------|-----------------|----------|------------------------|---------------------|
-| Tidy | `ValidationRun` | `listValidationRuns(workingCopyId)`, `getValidationRun(id)` | latest run `status === 'completed'` | latest run `status === 'running'` |
+| Tidy | `ValidationRun` | `listValidationRuns(workingCopyId)` (newest-first), `getValidationRun(id)` | latest run `status === 'completed'` | latest run `status === 'running'` |
 
 - `tidy` is inserted at **index 6**; **Export** becomes index 7 with `prerequisiteKey = 'tidy'`.
-- `passable('tidy')` is **always true** (passable with a warning when `queued_count` of unresolved
-  items > 0 — FR-004), joining `review` in the always-passable set.
+- `passable('tidy')` is **always true** (passable with a warning when `pendingCount` of unresolved
+  items > 0 — FR-004), joining `review` in the always-passable set. `pendingCount` is a **derived**
+  live count of `validation_item` rows with `status='pending'` (not a stored column).
 - `emptyButPassable('tidy')` = latest run `completed` with `auto_applied_count == 0` and zero pending
   items (nothing to fix — renders the "nothing to clean" empty state).
-- Switching the active Draft re-derives Tidy and never destroys another branch's run/items (FR-024).
+- Switching the active Draft re-derives Tidy and never destroys another branch's run/items
+  (edge case *Changing an upstream selection*).
 
 ## Settings (env, `core/config.py`)
 

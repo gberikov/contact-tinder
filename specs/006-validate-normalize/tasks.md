@@ -141,7 +141,10 @@ site is `https://`, `autoAppliedCount` reflects them, and each is undoable to it
   phones/websites, apply E.164 / mobile-type / http→https via a `_stage(...)` `kind="normalize"`
   StagedEdit (reuse the `processing_service` staging pattern + `audit_service`), increment counts.
 - [ ] T028 [US1] Implement run endpoints in `backend/src/api/routers/validation.py`: `POST
-  /working-copies/{id}/validation-runs` and `GET /validation-runs/{id}` wired to the service/schemas.
+  /working-copies/{id}/validation-runs`, `GET /working-copies/{id}/validation-runs` (list,
+  newest-first — needed by the wizard derivation/restore, FR-003), and `GET /validation-runs/{id}`,
+  wired to the service/schemas. `ValidationRunOut.pendingCount` is computed live as
+  `COUNT(items WHERE status='pending')` at serialization (not a stored column).
 - [ ] T029 [US1] Implement `validation_worker.run_once` body: claim a `queued` run and call
   `validation_service.run(...)` to terminal; fan out website checks with
   `asyncio.Semaphore(website_check_concurrency)` over `httpx.AsyncClient`; set `failed`+`last_error`
@@ -165,15 +168,18 @@ via API + the Tidy panel.
 **Goal**: Everything uncertain/broken (invalid phone, unclear type, invalid email, dead email domain,
 unreachable website, SSRF-unsafe website) is queued with explicit, labeled resolution actions.
 
-**Independent Test**: Seed a Draft with an unparseable phone, a typeless fixed-line, `mail@gmial.com`,
-a dead site, and `http://127.0.0.1/`; run; verify one queue item per finding with the correct
-`issueType` (and no fetch to `127.0.0.1`); resolve one (StagedEdit created) and skip one (unchanged).
+**Independent Test**: Seed a Draft with an unparseable phone, a typeless fixed-line, a
+syntactically-invalid email (`bob@@example`), `mail@gmial.com` (dead domain), a dead site, and
+`http://127.0.0.1/`; run; verify one queue item per finding with the correct `issueType` — including
+both `invalid_email` and `dead_email_domain` — and no fetch to `127.0.0.1`; resolve one (StagedEdit
+created) and skip one (unchanged).
 
 ### Tests for US2 (write first, must fail) ⚠️
 
-- [ ] T033 [P] [US2] Integration test `backend/tests/integration/test_validation_queue.py`: each
-  `issue_type` is produced for the right input (incl. `website_unsafe` with **no** outbound request);
-  `suggested_value` set for `unclear_type`.
+- [ ] T033 [P] [US2] Integration test `backend/tests/integration/test_validation_queue.py`: each of the
+  six `issue_type`s is produced for the right input — seed must include a **syntactically invalid**
+  email (→ `invalid_email`) **and** a dead-domain email (→ `dead_email_domain`) as distinct cases,
+  plus `website_unsafe` with **no** outbound request; assert `suggested_value` set for `unclear_type`.
 - [ ] T034 [P] [US2] Contract test `backend/tests/contract/test_validation_items_api.py`: list items,
   `resolve` (set_type / edit_value / remove_field → StagedEdit + `staged_edit_id`; 409 on re-resolve),
   `skip` (unchanged) per contract.

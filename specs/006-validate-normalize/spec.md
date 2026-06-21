@@ -158,10 +158,13 @@ and that resolving an item applies a reversible edit and removes it from the que
 3. **Given** an email whose domain has no MX record (e.g. `mail@gmial.com`), **When** Tidy runs,
    **Then** it appears in the queue as *email domain can't receive mail* with actions to edit or
    remove the address.
-4. **Given** a website that does not respond within the time limit, **When** Tidy runs, **Then** it
+4. **Given** a syntactically invalid email (e.g. `bob@@example` or `not-an-email`), **When** Tidy
+   runs, **Then** it appears in the queue as *invalid email* (distinct from the dead-domain case) with
+   actions to edit or remove the address, and is **not** auto-changed.
+5. **Given** a website that does not respond within the time limit, **When** Tidy runs, **Then** it
    appears in the queue as *website not reachable* with actions to edit or remove it, and is **not**
    auto-changed.
-5. **Given** any queue item, **When** the operator resolves or skips it, **Then** it leaves the
+6. **Given** any queue item, **When** the operator resolves or skips it, **Then** it leaves the
    pending queue, any chosen edit is applied reversibly, and the run's counts update.
 
 ---
@@ -321,10 +324,11 @@ hard block.
   detail to see what field changed, from what value, to what value, and why.
 - **FR-024**: Tidy MUST NOT push any change directly to Google; its edits stay staged on the Draft and
   reach Google only through the existing Export step and its existing safeguards.
-- **FR-025**: Outbound validation requests (DNS and HTTP) MUST be limited to the domains/URLs already
-  present in the operator's own kept contacts, MUST be time-limited and concurrency-bounded, MUST NOT
-  target non-public addresses (FR-029), and MUST NOT transmit contact data anywhere beyond the lookups
-  required to validate those values.
+- **FR-025**: *(Umbrella — reaffirms FR-014's time/concurrency limits and FR-029's SSRF guard; not
+  separate work.)* Outbound validation requests (DNS and HTTP) MUST be limited to the domains/URLs
+  already present in the operator's own kept contacts, MUST be time-limited and concurrency-bounded,
+  MUST NOT target non-public addresses (FR-029), and MUST NOT transmit contact data anywhere beyond
+  the lookups required to validate those values.
 
 **Terminology & UX (consistent with feature 005)**
 
@@ -359,8 +363,9 @@ hard block.
 
 ### Measurable Outcomes
 
-- **SC-001**: After a Tidy run, 100% of kept contacts' *valid* phone numbers are stored in E.164
-  format.
+- **SC-001**: After a Tidy run, 100% of kept contacts' phone numbers **deemed valid for the active
+  parsing region** (FR-028) are stored in E.164 format. (Numbers invalid for the active region are
+  queued, not normalized.)
 - **SC-002**: Zero contacts are auto-modified for findings the system is not confident about — every
   invalid phone, unclear-type phone, bad-domain email, and unreachable website is queued, not silently
   changed.

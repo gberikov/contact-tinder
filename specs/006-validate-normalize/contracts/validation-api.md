@@ -27,6 +27,13 @@ for this Draft) and returns it. The combined worker picks it up.
 
 Response (`ValidationRunOut`): see schema below.
 
+## List validation runs for a Draft
+
+`GET /api/working-copies/{working_copy_id}/validation-runs` → `200` `ValidationRunOut[]`
+
+Returns the Draft's runs **newest-first**. This is how the wizard finds the **latest** run on reload
+to derive Tidy's `completed`/`running`/`emptyButPassable` state (FR-003). May be empty (no run yet).
+
 ## Get a validation run (poll)
 
 `GET /api/validation-runs/{validation_run_id}` → `200` `ValidationRunOut`
@@ -49,9 +56,10 @@ Response (`ValidationRunOut`): see schema below.
   "completedAt": "iso8601|null"
 }
 ```
-- `queuedCount` = items created by the run; `pendingCount` = items still `pending` (drives the
-  passability warning, FR-004). The frontend polls this to terminal status (reusing the existing
-  poll-to-done pattern).
+- `queuedCount` = items created by the run (stored on `validation_run`). `pendingCount` is **not
+  stored** — it is computed live as `COUNT(validation_item WHERE status='pending')` at serialization
+  time (drives the passability warning, FR-004). The frontend polls this to terminal status (reusing
+  the existing poll-to-done pattern).
 
 ## List the manual queue
 
@@ -122,6 +130,6 @@ if not yet exposed, this contract formalizes it). The linked `validation_item` (
 - A `website_unsafe` item is created **without** any outbound fetch (SSRF guard, FR-029); its
   `originalValue` is the offending URL.
 - Starting a run on a Draft with **zero** kept contacts returns a `completed` run with all counts `0`
-  (the empty/"nothing to clean" state, FR-009) — the worker may complete it immediately.
+  (the *Nothing to clean* edge case; summary per FR-020) — the worker may complete it immediately.
 - All list/resolve/skip endpoints 404 on unknown ids and never leak another account's data
   (Principle I isolation).

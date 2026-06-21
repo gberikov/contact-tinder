@@ -160,9 +160,10 @@ Python deps are not a constitutional amendment.
 - [data-model.md](./data-model.md) — `ValidationRun` and `ValidationItem` schemas, the `StagedEdit`
   reuse (`kind="normalize"`), status/issue-type enumerations, the run state machine, and the
   auto-vs-queue decision table per field.
-- [contracts/validation-api.md](./contracts/validation-api.md) — HTTP contract for start-run, get-run,
-  list-items, resolve-item, skip-item, undo, and detect-region; request/response shapes; error modes
-  (incl. the SSRF-unsafe and not-reachable issue types).
+- [contracts/validation-api.md](./contracts/validation-api.md) — HTTP contract for start-run,
+  list-runs (newest-first, for wizard restore), get-run, list-items, resolve-item, skip-item, undo,
+  and detect-region; request/response shapes (incl. the derived `pendingCount`); error modes (incl.
+  the SSRF-unsafe and not-reachable issue types).
 - [quickstart.md](./quickstart.md) — install deps, run the migration, drive a Tidy run end-to-end
   over a seeded Draft, and verify auto-fixes, the queue, resolution/undo, passability, and the SSRF
   guard.
