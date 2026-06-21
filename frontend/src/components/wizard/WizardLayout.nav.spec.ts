@@ -1,9 +1,9 @@
+import { useWizardStore } from '@/stores/wizard';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
-import { useWizardStore } from '@/stores/wizard';
 import WizardLayout from './WizardLayout.vue';
 
 const Stub = defineComponent({ render: () => h('div', 'stub') });
@@ -34,7 +34,7 @@ describe('WizardLayout Continue navigation', () => {
     localStorage.clear();
   });
 
-  it('Continue on Review navigates to Export (merge complete, triage incomplete)', async () => {
+  it('Continue on Review navigates to Tidy (merge complete, triage incomplete)', async () => {
     const store = useWizardStore();
     vi.spyOn(store, 'hydrate').mockResolvedValue();
     // Merge complete so Review is reachable; triage NOT complete (passable('review') is what carries).
@@ -59,9 +59,7 @@ describe('WizardLayout Continue navigation', () => {
     await nextTick();
     expect(store.currentStepKey).toBe('review');
 
-    const continueBtn = wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('Continue'));
+    const continueBtn = wrapper.findAll('button').find((b) => b.text().includes('Continue'));
     expect(continueBtn, 'Continue button not found').toBeTruthy();
     expect(continueBtn?.attributes('disabled')).toBeUndefined();
 
@@ -69,7 +67,7 @@ describe('WizardLayout Continue navigation', () => {
     await flushPromises();
     await nextTick();
 
-    expect(router.currentRoute.value.path).toBe('/wizard/export');
-    expect(store.currentStepKey).toBe('export');
+    expect(router.currentRoute.value.path).toBe('/wizard/tidy');
+    expect(store.currentStepKey).toBe('tidy');
   });
 });

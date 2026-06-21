@@ -2,10 +2,18 @@
 // plain-language descriptions (FR-012), routes, prerequisites (FR-004/006), and which steps
 // run a long background job (FR-025). Pure data — no state here.
 
-import { DatabaseBackup, FilePen, GitMerge, Link2, ListChecks, Upload } from 'lucide-vue-next';
+import {
+  DatabaseBackup,
+  FilePen,
+  GitMerge,
+  Link2,
+  ListChecks,
+  Sparkles,
+  Upload,
+} from 'lucide-vue-next';
 import type { Component } from 'vue';
 
-export type StepKey = 'connect' | 'backup' | 'draft' | 'merge' | 'review' | 'export';
+export type StepKey = 'connect' | 'backup' | 'draft' | 'merge' | 'review' | 'tidy' | 'export';
 
 export interface WizardStep {
   key: StepKey;
@@ -70,12 +78,22 @@ export const WIZARD_STEPS: WizardStep[] = [
     icon: ListChecks,
   },
   {
-    key: 'export',
+    key: 'tidy',
     index: 6,
+    label: 'Tidy',
+    description: 'Clean up & check phones, emails, websites',
+    route: '/wizard/tidy',
+    prerequisiteKey: 'review',
+    isLongJob: true,
+    icon: Sparkles,
+  },
+  {
+    key: 'export',
+    index: 7,
     label: 'Export',
     description: 'Push your changes back to Google',
     route: '/wizard/export',
-    prerequisiteKey: 'review',
+    prerequisiteKey: 'tidy',
     isLongJob: true,
     icon: Upload,
   },

@@ -27,6 +27,7 @@ export const router = createRouter({
           name: 'review',
           component: () => import('@/pages/WorkingCopyTriage.vue'),
         },
+        { path: 'tidy', name: 'tidy', component: () => import('@/pages/wizard/TidyStep.vue') },
         { path: 'export', name: 'export', component: () => import('@/pages/Export.vue') },
       ],
     },

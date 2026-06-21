@@ -2,16 +2,17 @@ import { STEP_KEYS, WIZARD_STEPS } from '@/wizard/steps';
 import { describe, expect, it } from 'vitest';
 
 describe('wizard terminology (FR-010/011/012)', () => {
-  it('uses the six simplified plain-verb labels in order', () => {
+  it('uses the seven simplified plain-verb labels in order', () => {
     expect(WIZARD_STEPS.map((s) => s.label)).toEqual([
       'Connect',
       'Backup',
       'Draft',
       'Merge',
       'Review',
+      'Tidy',
       'Export',
     ]);
-    expect(STEP_KEYS).toEqual(['connect', 'backup', 'draft', 'merge', 'review', 'export']);
+    expect(STEP_KEYS).toEqual(['connect', 'backup', 'draft', 'merge', 'review', 'tidy', 'export']);
   });
 
   it('never exposes the old jargon in step labels (FR-010/011)', () => {

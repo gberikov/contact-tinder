@@ -6,6 +6,7 @@ import {
   type ImportJob,
   type Snapshot,
   type TriageSession,
+  type ValidationRun,
   type WorkingCopy,
   api,
 } from '@/services/api';
@@ -40,6 +41,7 @@ interface State extends PersistedChain {
   importJob: ImportJob | null;
   dedupRuns: DedupRun[];
   triageSessions: TriageSession[];
+  validationRuns: ValidationRun[];
   exportPreview: ExportPreview | null;
   exportRun: ExportRun | null;
   loading: boolean;
@@ -72,6 +74,7 @@ export const useWizardStore = defineStore('wizard', {
     importJob: null,
     dedupRuns: [],
     triageSessions: [],
+    validationRuns: [],
     exportPreview: null,
     exportRun: null,
     loading: false,
@@ -134,6 +137,10 @@ export const useWizardStore = defineStore('wizard', {
         ? state.triageSessions[state.triageSessions.length - 1]
         : null;
     },
+    // listValidationRuns returns newest-first, so the latest run is the first element.
+    latestValidationRun(state): ValidationRun | null {
+      return state.validationRuns.length ? state.validationRuns[0] : null;
+    },
 
     /** Live Backup import progress: fetched/total + percent (null total ⇒ indeterminate). */
     backupProgress(state): { fetched: number; total: number | null; pct: number | null } | null {
@@ -159,6 +166,8 @@ export const useWizardStore = defineStore('wizard', {
             return this.latestDedupRun?.status === 'completed';
           case 'review':
             return this.latestTriageSession?.status === 'complete';
+          case 'tidy':
+            return this.latestValidationRun?.status === 'completed';
           case 'export':
             return this.exportRun?.status === 'completed';
         }
@@ -173,6 +182,11 @@ export const useWizardStore = defineStore('wizard', {
             );
           case 'merge':
             return this.latestDedupRun?.status === 'running';
+          case 'tidy':
+            return (
+              this.latestValidationRun?.status === 'running' ||
+              this.latestValidationRun?.status === 'queued'
+            );
           case 'export':
             return state.exportRun?.status === 'running';
           default:
@@ -199,6 +213,10 @@ export const useWizardStore = defineStore('wizard', {
             ? (this.latestTriageSession?.summary.total ?? 0) === 0
             : false;
         }
+        if (key === 'tidy') {
+          const run = this.latestValidationRun;
+          return run?.status === 'completed' && run.autoAppliedCount === 0 && run.queuedCount === 0;
+        }
         return false;
       };
     },
@@ -206,7 +224,9 @@ export const useWizardStore = defineStore('wizard', {
     // every other step is passable exactly when it is completed (or empty-but-passable).
     passable() {
       return (key: StepKey): boolean => {
-        if (key === 'review') return true;
+        // Review and Tidy are advisory: continuing is allowed with a warning (Export's undecided +
+        // Tidy's open-items warnings are the net). Every other step is passable when completed.
+        if (key === 'review' || key === 'tidy') return true;
         return this.completed(key) || this.emptyButPassable(key);
       };
     },
@@ -316,6 +336,10 @@ export const useWizardStore = defineStore('wizard', {
       const wid = this.activeWorkingCopyId;
       this.triageSessions = wid ? await api.listTriageSessions(wid) : [];
     },
+    async loadTidy() {
+      const wid = this.activeWorkingCopyId;
+      this.validationRuns = wid ? await api.listValidationRuns(wid) : [];
+    },
     async loadExport() {
       const wid = this.activeWorkingCopyId;
       this.exportPreview = wid ? await api.previewExport(wid) : null;
@@ -357,7 +381,12 @@ export const useWizardStore = defineStore('wizard', {
         if (this.activeSnapshotId) await this.loadBackupJob();
         await this.loadWorkingCopies();
         if (this.activeWorkingCopyId) {
-          await Promise.all([this.loadMerge(), this.loadReview(), this.loadExport()]);
+          await Promise.all([
+            this.loadMerge(),
+            this.loadReview(),
+            this.loadTidy(),
+            this.loadExport(),
+          ]);
         }
       } catch (e) {
         this.error = (e as Error).message;

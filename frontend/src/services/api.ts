@@ -264,6 +264,58 @@ export interface ExportRun {
   report: ExportReport;
 }
 
+// ---- Validate & Normalize / Tidy (feature 006) --------------------------------------------
+
+export interface ValidationRun {
+  id: string;
+  workingCopyId: string;
+  sessionId?: string | null;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  defaultRegion?: string | null;
+  checkedCount: number;
+  autoAppliedCount: number;
+  queuedCount: number;
+  pendingCount: number;
+  lastError?: string | null;
+  createdAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+}
+
+export type ValidationIssue =
+  | 'invalid_phone'
+  | 'unclear_type'
+  | 'invalid_email'
+  | 'dead_email_domain'
+  | 'website_unreachable'
+  | 'website_unsafe';
+
+export interface ValidationItem {
+  id: string;
+  workingCopyContactId: string;
+  contactDisplayName?: string | null;
+  fieldKind: 'phone' | 'email' | 'website';
+  fieldIndex: number;
+  issueType: ValidationIssue;
+  originalValue: string;
+  suggestedValue?: string | null;
+  status: 'pending' | 'resolved' | 'skipped';
+  stagedEditId?: string | null;
+  createdAt: string;
+  resolvedAt?: string | null;
+}
+
+export interface ResolveValidationItemBody {
+  action: 'set_type' | 'edit_value' | 'remove_field';
+  type?: string;
+  value?: string;
+}
+
+export interface DetectRegionResult {
+  region: string | null;
+  source: 'geoip' | 'none';
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -434,4 +486,25 @@ export const api = {
     request<ExportRun>(`/export-runs/${runId}/undo-delete`, { method: 'POST' }),
   undoExportLabel: (runId: string) =>
     request<ExportRun>(`/export-runs/${runId}/undo-label`, { method: 'POST' }),
+
+  // Validate & Normalize / Tidy (feature 006)
+  startValidationRun: (workingCopyId: string, defaultRegion?: string, sessionId?: string) =>
+    request<ValidationRun>(`/working-copies/${workingCopyId}/validation-runs`, {
+      method: 'POST',
+      body: JSON.stringify({ defaultRegion, sessionId }),
+    }),
+  listValidationRuns: (workingCopyId: string) =>
+    request<ValidationRun[]>(`/working-copies/${workingCopyId}/validation-runs`),
+  getValidationRun: (runId: string) => request<ValidationRun>(`/validation-runs/${runId}`),
+  listValidationItems: (runId: string, status: 'pending' | 'all' = 'pending') =>
+    request<ValidationItem[]>(`/validation-runs/${runId}/items?status=${status}`),
+  resolveValidationItem: (itemId: string, body: ResolveValidationItemBody) =>
+    request<ValidationItem>(`/validation-items/${itemId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  skipValidationItem: (itemId: string) =>
+    request<ValidationItem>(`/validation-items/${itemId}/skip`, { method: 'POST' }),
+  // Staged-edit undo reuses the existing feature-003 endpoint defined above (`undoStagedEdit`).
+  detectRegion: () => request<DetectRegionResult>('/settings/detect-region'),
 };
