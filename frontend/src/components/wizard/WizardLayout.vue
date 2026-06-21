@@ -32,14 +32,18 @@ function syncFromRoute() {
 }
 
 function goNext() {
-  if (!nextStep.value || !canContinue.value) return;
-  wizard.goToStep(nextStep.value.key);
-  router.push(nextStep.value.route);
+  // Capture the target BEFORE goToStep mutates currentStepKey — that mutation reactively
+  // recomputes nextStep (e.g. Review→Export makes it null), which would crash a later read.
+  const next = nextStep.value;
+  if (!next || !canContinue.value) return;
+  wizard.goToStep(next.key);
+  router.push(next.route);
 }
 function goBack() {
-  if (!prevStep.value) return;
-  wizard.goToStep(prevStep.value.key);
-  router.push(prevStep.value.route);
+  const prev = prevStep.value;
+  if (!prev) return;
+  wizard.goToStep(prev.key);
+  router.push(prev.route);
 }
 
 onMounted(async () => {
