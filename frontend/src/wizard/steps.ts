@@ -2,6 +2,9 @@
 // plain-language descriptions (FR-012), routes, prerequisites (FR-004/006), and which steps
 // run a long background job (FR-025). Pure data — no state here.
 
+import { DatabaseBackup, FilePen, GitMerge, Link2, ListChecks, Upload } from 'lucide-vue-next';
+import type { Component } from 'vue';
+
 export type StepKey = 'connect' | 'backup' | 'draft' | 'merge' | 'review' | 'export';
 
 export interface WizardStep {
@@ -12,6 +15,7 @@ export interface WizardStep {
   route: string;
   prerequisiteKey: StepKey | null;
   isLongJob: boolean;
+  icon: Component;
 }
 
 export const WIZARD_STEPS: WizardStep[] = [
@@ -23,6 +27,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     route: '/wizard/connect',
     prerequisiteKey: null,
     isLongJob: false,
+    icon: Link2,
   },
   {
     key: 'backup',
@@ -32,6 +37,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     route: '/wizard/backup',
     prerequisiteKey: 'connect',
     isLongJob: true,
+    icon: DatabaseBackup,
   },
   {
     key: 'draft',
@@ -41,6 +47,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     route: '/wizard/draft',
     prerequisiteKey: 'backup',
     isLongJob: false,
+    icon: FilePen,
   },
   {
     key: 'merge',
@@ -50,6 +57,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     route: '/wizard/merge',
     prerequisiteKey: 'draft',
     isLongJob: true,
+    icon: GitMerge,
   },
   {
     key: 'review',
@@ -59,6 +67,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     route: '/wizard/review',
     prerequisiteKey: 'merge',
     isLongJob: false,
+    icon: ListChecks,
   },
   {
     key: 'export',
@@ -68,6 +77,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     route: '/wizard/export',
     prerequisiteKey: 'review',
     isLongJob: true,
+    icon: Upload,
   },
 ];
 

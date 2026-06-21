@@ -66,7 +66,7 @@ function onStepChange(index: number | undefined) {
               v-else-if="wizard.completed(step.key) && step.index !== currentStepIndex"
               class="size-4"
             />
-            <span v-else>{{ step.index }}</span>
+            <component :is="step.icon" v-else class="size-4" />
           </StepperIndicator>
           <StepperTitle :class="step.index === currentStepIndex ? 'text-primary' : ''">
             {{ step.label }}
