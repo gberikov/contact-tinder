@@ -23,6 +23,9 @@ const nothingToClean = computed(
 async function restore() {
   if (!workingCopyId.value) return;
   await tidy.ensureRegion();
+  // Refresh review sessions so `sessionId` is current (a stale id would otherwise scope the run);
+  // the backend also tolerates an unknown session id, but keeping it fresh is correct.
+  await wizard.loadReview();
   await tidy.restore(workingCopyId.value);
   await wizard.loadTidy();
 }

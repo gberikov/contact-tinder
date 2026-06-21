@@ -42,6 +42,13 @@ def start_run(
 ) -> ValidationRun:
     if session.get(WorkingCopy, working_copy_id) is None:
         raise NotFoundError("working copy not found")
+    # Tolerate a stale/unknown session id from the client (e.g. a triage session that was reset):
+    # only keep it if it actually exists and belongs to this draft, else let the run resolve the
+    # latest session itself in `_kept_contacts`. Prevents a FK-violation 500 on start.
+    if session_id is not None:
+        ts = session.get(TriageSession, session_id)
+        if ts is None or ts.working_copy_id != working_copy_id:
+            session_id = None
     existing = session.scalar(
         select(ValidationRun).where(
             ValidationRun.working_copy_id == working_copy_id,
@@ -187,7 +194,8 @@ def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=Non
     run = get_run(session, run_id)
     run.status = "running"
     run.started_at = _now()
-    session.flush()
+    session.commit()  # publish `running` immediately so the UI reflects it and the long pass below
+    session.refresh(run)  # doesn't hold one giant transaction open across hundreds of network checks
     region = run.default_region or get_settings().phone_default_region
 
     checked = auto = queued = 0

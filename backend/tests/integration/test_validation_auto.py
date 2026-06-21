@@ -75,6 +75,17 @@ def test_rerun_is_idempotent(db):
     assert second.auto_applied_count == 0
 
 
+def test_start_tolerates_unknown_session_id(db):
+    import uuid as _uuid
+
+    account = seed_account(db)
+    wc = seed_working_copy(db, account, [_person(0, phones=[{"value": "+7 701 722 1502"}])])
+    # A stale/unknown session id must NOT raise (no FK 500); it is coerced to None.
+    run = validation_service.start_run(db, wc.id, session_id=_uuid.uuid4(), default_region="KZ")
+    assert run.session_id is None
+    assert run.status == "queued"
+
+
 def test_snapshot_untouched(db):
     account = seed_account(db)
     wc = seed_working_copy(db, account, [_person(0, phones=[{"value": "+7 (701) 722-15-02"}])])
