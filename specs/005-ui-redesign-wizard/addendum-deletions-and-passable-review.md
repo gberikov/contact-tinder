@@ -119,6 +119,20 @@ of the others.
 - **FR-A10** Deletion errors (e.g. backend conflict) surface inline on the step, reusing each step's
   existing `error` display.
 
+### Stepper icons
+
+- **FR-A14** Each stepper indicator shows a **per-step icon instead of its step number**. The numeric
+  fallback (`<span>{{ step.index }}</span>`) in `WizardStepper.vue`'s `StepperIndicator` is replaced
+  by a step-specific `lucide-vue-next` icon. The icon is added as a static `icon` field on each
+  `WizardStep` in `wizard/steps.ts` (a component reference — the file stays pure data, no runtime
+  state). Suggested mapping (final choice during implementation): Connect → `Link2`/`Plug`,
+  Backup → `DatabaseBackup`/`Archive`, Draft → `FilePen`, Merge → `GitMerge`, Review → `ListChecks`,
+  Export → `Upload`.
+- **FR-A15** The two **state** indicators are unchanged and still take precedence over the step icon:
+  **running** shows the animated `Loader2` spinner, **completed** (and not the current step) shows the
+  `Check`. The per-step icon appears only in the idle/current/upcoming state where the number used to
+  be. The compact narrow-viewport "Step N of 6" text label is unchanged.
+
 ### Review gate
 
 - **FR-A11** The operator can always continue from **Review** to **Export**, regardless of whether a
@@ -158,3 +172,5 @@ of the others.
 3. In **Draft**, a draft can be deleted; its Merge/Review/Export data disappears with it.
 4. On **Review**, "Continue" is always enabled and lands on **Export**, where the undecided warning
    still appears if triage was skipped or partial.
+5. Each stepper step shows a distinct icon (not a number) in its idle state, while still flipping to a
+   spinner while running and a check when completed.
