@@ -328,6 +328,8 @@ export const api = {
       body: JSON.stringify({ label }),
     }),
   listWorkingCopies: () => request<WorkingCopy[]>('/working-copies'),
+  deleteWorkingCopy: (id: string) =>
+    request<void>(`/working-copies/${id}?confirm=true`, { method: 'DELETE' }),
 
   // Deduplication
   startDedupRun: (workingCopyId: string, background = true) =>
