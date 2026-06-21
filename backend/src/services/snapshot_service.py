@@ -11,7 +11,7 @@ from src.core.errors import ConflictError, NotFoundError
 from src.models.account import Account
 from src.models.snapshot import ImportJob, Snapshot, SnapshotContact
 from src.models.working_copy import WorkingCopy
-from src.services import audit_service
+from src.services import audit_service, working_copy_service
 
 _ACTIVE_IMPORT_STATES = ("queued", "running")
 
@@ -115,9 +115,14 @@ def delete_snapshot(session: Session, snapshot_id: uuid.UUID, *, confirm: bool) 
     if not confirm:
         raise ConflictError("deletion requires explicit confirmation", code="confirmation_required",
                             status_code=400)
-    if working_copy_count(session, snapshot_id) > 0:
-        raise ConflictError("snapshot has working copies; delete them first")
+    # Cascade: remove each working copy (and all its derived dedup/triage/export data) first,
+    # so the snapshot's RESTRICT child constraint is satisfied (US Backup cleanup).
+    for wc in session.scalars(
+        select(WorkingCopy.id).where(WorkingCopy.snapshot_id == snapshot_id)
+    ).all():
+        working_copy_service.delete_working_copy(session, wc, confirm=True)
 
+    snapshot = get_snapshot(session, snapshot_id)  # re-fetch after child commits
     snapshot.status = "deleting"
     session.flush()
     audit_service.record(

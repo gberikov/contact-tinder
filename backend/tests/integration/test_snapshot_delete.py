@@ -17,14 +17,19 @@ def test_delete_requires_confirmation(db):
     assert exc.value.status_code == 400
 
 
-def test_delete_blocked_while_working_copies_exist(db):
+def test_delete_cascades_through_working_copies(db):
     account = seed_account(db)
     snapshot = seed_complete_snapshot(db, account, count=1)
     working_copy_service.create_working_copy(db, snapshot.id, "wc")
-    with pytest.raises(ConflictError):
-        snapshot_service.delete_snapshot(db, snapshot.id, confirm=True)
-    # snapshot still present
-    assert snapshot_service.get_snapshot(db, snapshot.id) is not None
+    sid = snapshot.id
+
+    snapshot_service.delete_snapshot(db, sid, confirm=True)
+
+    from src.core.errors import NotFoundError
+    with pytest.raises(NotFoundError):
+        snapshot_service.get_snapshot(db, sid)
+    # its working copies are gone too
+    assert working_copy_service.list_working_copies(db) == []
 
 
 def test_delete_succeeds_and_audits(db):
