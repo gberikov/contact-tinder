@@ -7,8 +7,10 @@ defineEmits<{ merge: [clusterId: string, survivorId: string]; dismiss: [clusterI
 </script>
 
 <template>
-  <div class="cluster-list">
-    <p v-if="!clusters.length" class="empty">No duplicate clusters to review.</p>
+  <div class="space-y-3">
+    <p v-if="!clusters.length" class="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+      No duplicate clusters to review.
+    </p>
     <ClusterCard
       v-for="c in clusters"
       :key="c.id"

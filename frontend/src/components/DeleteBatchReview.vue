@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button } from '@/components/ui/button';
 import type { DeleteBatch, DeletionRecord } from '@/services/api';
 
 defineProps<{ batch: DeleteBatch | null; records: DeletionRecord[]; error: string | null }>();
@@ -6,37 +7,32 @@ const emit = defineEmits<{ (e: 'confirm'): void; (e: 'undo'): void }>();
 </script>
 
 <template>
-  <div class="review">
-    <p v-if="!batch">No delete batch.</p>
+  <div class="space-y-3">
+    <p v-if="!batch" class="text-sm text-muted-foreground">No delete batch.</p>
     <template v-else>
-      <h3>{{ records.length }} contact(s) will be deleted in Google</h3>
-      <ul class="records">
+      <h3 class="font-medium">{{ records.length }} contact(s) will be deleted in Google</h3>
+      <ul class="max-h-80 space-y-0.5 overflow-auto text-sm">
         <li v-for="r in records" :key="r.id">
-          {{ r.contact.displayName ?? '(no name)' }} — {{ r.status }}
+          {{ r.contact.displayName ?? '(no name)' }} —
+          <span class="text-muted-foreground">{{ r.status }}</span>
         </li>
       </ul>
-      <p v-if="error" class="error">
+      <p v-if="error" class="text-sm text-destructive">
         {{ error }} — re-consent with the contacts write scope is required.
       </p>
-      <div class="actions">
-        <button
-          type="button"
+      <div class="flex gap-3">
+        <Button
+          variant="destructive"
           :disabled="batch.status !== 'staged' && batch.status !== 'previewed'"
           @click="emit('confirm')"
         >
           Confirm delete ({{ batch.totalCount }})
-        </button>
-        <button type="button" :disabled="batch.status !== 'committed'" @click="emit('undo')">
+        </Button>
+        <Button variant="outline" :disabled="batch.status !== 'committed'" @click="emit('undo')">
           Undo
-        </button>
+        </Button>
       </div>
-      <p class="status">Batch status: {{ batch.status }}</p>
+      <p class="text-xs text-muted-foreground">Batch status: {{ batch.status }}</p>
     </template>
   </div>
 </template>
-
-<style scoped>
-.records { max-height: 320px; overflow: auto; }
-.error { color: #b00020; }
-.actions { display: flex; gap: 12px; margin-top: 12px; }
-</style>

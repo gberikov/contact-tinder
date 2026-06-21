@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import type { ContactDetail } from '@/services/api';
 import { ref } from 'vue';
 
@@ -16,14 +18,9 @@ function save() {
 </script>
 
 <template>
-  <div class="edit">
-    <label>Display name</label>
-    <input v-model="displayName" type="text" />
-    <button type="button" @click="save">Save edit</button>
+  <div class="flex items-center gap-2">
+    <label class="text-sm text-muted-foreground">Display name</label>
+    <Input v-model="displayName" type="text" />
+    <Button size="sm" @click="save">Save edit</Button>
   </div>
 </template>
-
-<style scoped>
-.edit { display: flex; gap: 8px; align-items: center; }
-label { color: #666; }
-</style>

@@ -2,7 +2,9 @@
 import CompletionSummary from '@/components/CompletionSummary.vue';
 import ContactCard from '@/components/ContactCard.vue';
 import SwipeControls from '@/components/SwipeControls.vue';
+import { Button } from '@/components/ui/button';
 import { useTriageStore } from '@/stores/triage';
+import { Undo2 } from 'lucide-vue-next';
 import { storeToRefs } from 'pinia';
 import { onBeforeUnmount, onMounted } from 'vue';
 
@@ -35,13 +37,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <template>
-  <div class="deck">
-    <div class="topbar">
-      <button type="button" class="undo" :disabled="!canUndo" @click="store.undoLast()">
-        ↶ Undo
-      </button>
+  <div class="mx-auto max-w-md">
+    <div class="mb-2 flex min-h-8 justify-end">
+      <Button variant="outline" size="sm" :disabled="!canUndo" @click="store.undoLast()">
+        <Undo2 /> Undo
+      </Button>
     </div>
-    <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="error" class="text-center text-sm text-destructive">{{ error }}</p>
     <template v-if="store.currentCard">
       <ContactCard :contact="store.currentCard.contact" />
       <SwipeControls
@@ -49,8 +51,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         @delete="store.decide('delete')"
         @process="store.decide('process', { wantsEdit: true, wantsTransliterate: true })"
       />
-      <p v-if="summary" class="progress">{{ summary.remaining }} remaining</p>
-      <p class="hints">
+      <p v-if="summary" class="mt-2 text-center text-sm text-muted-foreground">
+        {{ summary.remaining }} remaining
+      </p>
+      <p
+        class="mt-3 text-center text-xs text-muted-foreground [&_kbd]:rounded [&_kbd]:border [&_kbd]:bg-muted [&_kbd]:px-1.5 [&_kbd]:py-0.5"
+      >
         <kbd>←</kbd>/<kbd>D</kbd> delete · <kbd>→</kbd>/<kbd>K</kbd> keep ·
         <kbd>↑</kbd>/<kbd>P</kbd> process · <kbd>↓</kbd>/<kbd>U</kbd> undo
       </p>
@@ -58,20 +64,3 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
     <CompletionSummary v-else-if="summary" :summary="summary" />
   </div>
 </template>
-
-<style scoped>
-.deck { max-width: 420px; margin: 0 auto; }
-.topbar { display: flex; justify-content: flex-end; margin-bottom: 8px; min-height: 32px; }
-.undo { padding: 6px 12px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
-.undo:disabled { opacity: 0.4; cursor: default; }
-.progress { text-align: center; color: #666; margin-top: 8px; }
-.error { color: #b00020; text-align: center; }
-.hints { text-align: center; color: #999; font-size: 13px; margin-top: 12px; }
-kbd {
-  background: #f1f1f1;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-family: inherit;
-}
-</style>

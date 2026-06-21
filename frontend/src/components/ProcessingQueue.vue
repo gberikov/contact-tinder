@@ -2,6 +2,7 @@
 import ContactCard from '@/components/ContactCard.vue';
 import EditCardForm from '@/components/EditCardForm.vue';
 import TransliterationReview from '@/components/TransliterationReview.vue';
+import { Button } from '@/components/ui/button';
 import type { ProcessingItem } from '@/services/api';
 
 defineProps<{ items: ProcessingItem[] }>();
@@ -13,8 +14,8 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <ul class="queue">
-    <li v-for="item in items" :key="item.id" class="item">
+  <ul class="flex flex-col gap-5">
+    <li v-for="item in items" :key="item.id" class="space-y-3 border-b pb-4">
       <ContactCard :contact="item.contact" />
       <TransliterationReview
         v-if="item.wantsTransliterate && item.transliterationSuggestion"
@@ -26,14 +27,10 @@ const emit = defineEmits<{
         :contact="item.contact"
         @save="(p) => emit('save-edit', item.workingCopyContactId, p)"
       />
-      <button type="button" class="done" @click="emit('done', item.id)">Done (keep)</button>
+      <Button variant="secondary" size="sm" @click="emit('done', item.id)">Done (keep)</Button>
     </li>
-    <li v-if="items.length === 0">Nothing left to process.</li>
+    <li v-if="items.length === 0" class="text-sm text-muted-foreground">
+      Nothing left to process.
+    </li>
   </ul>
 </template>
-
-<style scoped>
-.queue { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 20px; }
-.item { border-bottom: 1px solid #eee; padding-bottom: 16px; }
-.done { margin-top: 10px; }
-</style>

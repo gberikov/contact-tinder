@@ -1,22 +1,20 @@
 <script setup lang="ts">
+import { Card, CardContent } from '@/components/ui/card';
 import type { SessionSummary } from '@/services/api';
 
 defineProps<{ summary: SessionSummary }>();
 </script>
 
 <template>
-  <div class="summary">
-    <h3>All done 🎉</h3>
-    <ul>
-      <li>Kept: {{ summary.keep }}</li>
-      <li>Queued for deletion: {{ summary.delete }}</li>
-      <li>Sent to processing: {{ summary.processing }}</li>
-      <li>Total: {{ summary.total }}</li>
-    </ul>
-  </div>
+  <Card class="mx-auto max-w-sm text-center">
+    <CardContent class="space-y-3 p-6">
+      <h3 class="text-lg font-semibold">All done 🎉</h3>
+      <ul class="space-y-1 text-sm text-muted-foreground">
+        <li>Kept: {{ summary.keep }}</li>
+        <li>Queued for deletion: {{ summary.delete }}</li>
+        <li>Sent to processing: {{ summary.processing }}</li>
+        <li class="font-medium text-foreground">Total: {{ summary.total }}</li>
+      </ul>
+    </CardContent>
+  </Card>
 </template>
-
-<style scoped>
-.summary { text-align: center; padding: 24px; }
-ul { list-style: none; padding: 0; }
-</style>

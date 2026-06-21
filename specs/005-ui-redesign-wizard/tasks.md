@@ -110,20 +110,20 @@ derivation, active-selection chain, running-state, gating, and terminology. Vite
 
 ### Tests for User Story 3 (write FIRST — must FAIL) ⚠️
 
-- [ ] T028 [P] [US3] Smoke spec asserting each step page renders a single primary action via the shadcn `Button` and uses `@/components/ui` primitives (no legacy raw `<table>`/inline-styled blocks) in `frontend/tests/wizard-consistency.spec.ts`.
+- [X] T028 [P] [US3] Smoke spec asserting each step page renders a single primary action via the shadcn `Button` and uses `@/components/ui` primitives (no legacy raw `<table>`/inline-styled blocks) in `frontend/tests/wizard-consistency.spec.ts`.
 
 ### Implementation for User Story 3 (restyle — parallel, different files)
 
-- [ ] T029 [P] [US3] Restyle Connect — `frontend/src/pages/Accounts.vue` (shadcn Card/Button/Badge; single primary action).
-- [ ] T030 [P] [US3] Restyle Backup — `frontend/src/pages/Snapshots.vue` and `frontend/src/pages/Snapshot.vue`.
-- [ ] T031 [P] [US3] Restyle Draft — `frontend/src/pages/WorkingCopies.vue`.
-- [ ] T032 [P] [US3] Restyle Merge — `frontend/src/pages/WorkingCopyDedup.vue` + `frontend/src/components/{ClusterList,ClusterCard,MergePreview,DedupRunPanel,ConfidenceBadge}.vue`.
-- [ ] T033 [P] [US3] Restyle Review — `frontend/src/pages/WorkingCopyTriage.vue` + `frontend/src/pages/Processing.vue` + `frontend/src/components/{SwipeDeck,SwipeControls,ProcessingQueue,TransliterationReview,EditCardForm,CompletionSummary}.vue` (swipe surface keeps labeled keep/delete/process buttons — FR-028). Note: `ContactCard.vue` is restyled in T035, not here, to avoid a parallel-edit conflict.
-- [ ] T034 [P] [US3] Restyle Export — `frontend/src/pages/Export.vue` + `frontend/src/pages/DeleteReview.vue` + `frontend/src/components/{ExportPreview,ExportReport,UndecidedWarning,DeleteBatchReview,LabelPreview}.vue` (keep dry-run preview, undecided warning, explicit labeled confirm, undo — FR-018/019/028).
-- [ ] T035 [P] [US3] Restyle shared `frontend/src/components/ContactTable.vue` and `frontend/src/components/ContactCard.vue` to shadcn Table/Card primitives.
-- [ ] T036 [US3] Apply the `frontend-design` skill pass on the wizard shell + tokens (typography scale, spacing rhythm, hierarchy) in `frontend/src/style.css` + `frontend/src/components/wizard/**` (FR-013/SC-004).
-- [ ] T037 [US3] Add visible feedback for every state-changing action via `sonner` toasts + inline in-progress/success/error states across step pages (FR-029/SC-010).
-- [ ] T038 [US3] Predictability sweep: make advance/back/select-active/confirm/cancel controls look and behave identically across all six step pages (FR-026/027/SC-008/009).
+- [X] T029 [P] [US3] Restyle Connect — `frontend/src/pages/Accounts.vue` (shadcn Card/Button/Badge; single primary action).
+- [X] T030 [P] [US3] Restyle Backup — `frontend/src/pages/Snapshots.vue` and `frontend/src/pages/Snapshot.vue`.
+- [X] T031 [P] [US3] Restyle Draft — `frontend/src/pages/WorkingCopies.vue`.
+- [X] T032 [P] [US3] Restyle Merge — `frontend/src/pages/WorkingCopyDedup.vue` + `frontend/src/components/{ClusterList,ClusterCard,MergePreview,DedupRunPanel,ConfidenceBadge}.vue`.
+- [X] T033 [P] [US3] Restyle Review — `frontend/src/pages/WorkingCopyTriage.vue` + `frontend/src/pages/Processing.vue` + `frontend/src/components/{SwipeDeck,SwipeControls,ProcessingQueue,TransliterationReview,EditCardForm,CompletionSummary}.vue` (swipe surface keeps labeled keep/delete/process buttons — FR-028). Note: `ContactCard.vue` is restyled in T035, not here, to avoid a parallel-edit conflict.
+- [X] T034 [P] [US3] Restyle Export — `frontend/src/pages/Export.vue` + `frontend/src/pages/DeleteReview.vue` + `frontend/src/components/{ExportPreview,ExportReport,UndecidedWarning,DeleteBatchReview,LabelPreview}.vue` (keep dry-run preview, undecided warning, explicit labeled confirm, undo — FR-018/019/028).
+- [X] T035 [P] [US3] Restyle shared `frontend/src/components/ContactTable.vue` and `frontend/src/components/ContactCard.vue` to shadcn Table/Card primitives.
+- [X] T036 [US3] Apply the `frontend-design` skill pass on the wizard shell + tokens (typography scale, spacing rhythm, hierarchy) in `frontend/src/style.css` + `frontend/src/components/wizard/**` (FR-013/SC-004).
+- [X] T037 [US3] Add visible feedback for every state-changing action via `sonner` toasts + inline in-progress/success/error states across step pages (FR-029/SC-010).
+- [X] T038 [US3] Predictability sweep: make advance/back/select-active/confirm/cancel controls look and behave identically across all six step pages (FR-026/027/SC-008/009).
 
 **Checkpoint**: All three stories independently functional; whole app on the unified system.
 
@@ -131,7 +131,7 @@ derivation, active-selection chain, running-state, gating, and terminology. Vite
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T039 [P] Remove dead legacy nav/styles and obsolete routes from `frontend/src/App.vue` and `frontend/src/router/index.ts`; ensure only wizard routes + redirects remain.
+- [X] T039 [P] Remove dead legacy nav/styles and obsolete routes from `frontend/src/App.vue` and `frontend/src/router/index.ts`; ensure only wizard routes + redirects remain.
 - [X] T040 Update existing page specs in `frontend/tests/` (e.g. `dedup.test.ts`, `triage-swipe.test.ts`, `Export.*.spec.ts`, `delete-review.test.ts`, `processing-queue.test.ts`) for renamed copy/markup so the suite stays green.
 - [X] T041 [P] Run the full quality gate: `npm run lint` + `npm run build` + `npm run test` — all green (constitution Biome gate + TDD).
 - [ ] T042 Execute the `quickstart.md` validation walkthrough (steps 1–12 + UX-principle checks) and confirm every row passes.

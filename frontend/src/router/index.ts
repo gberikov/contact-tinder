@@ -41,10 +41,20 @@ export const router = createRouter({
     { path: '/working-copies/:id/dedup', redirect: '/wizard/merge' },
     { path: '/working-copies/:id/triage', redirect: '/wizard/review' },
     { path: '/working-copies/:id/export', redirect: '/wizard/export' },
-    { path: '/working-copies/:id/delete-review', redirect: '/wizard/review' },
-    { path: '/triage-sessions/:id/processing', redirect: '/wizard/review' },
 
-    // Legacy detail pages still reachable directly when an :id is supplied.
+    // Review sub-flows — reachable from the Review step (FR-017: preserve capability).
+    {
+      path: '/working-copies/:id/delete-review',
+      name: 'delete-review',
+      component: () => import('@/pages/DeleteReview.vue'),
+    },
+    {
+      path: '/triage-sessions/:id/processing',
+      name: 'triage-processing',
+      component: () => import('@/pages/Processing.vue'),
+    },
+
+    // Legacy detail page still reachable directly when an :id is supplied.
     {
       path: '/snapshots/:id',
       name: 'snapshot',

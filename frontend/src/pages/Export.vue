@@ -3,6 +3,7 @@ import ExportPreview from '@/components/ExportPreview.vue';
 import ExportReport from '@/components/ExportReport.vue';
 import LabelPreview from '@/components/LabelPreview.vue';
 import UndecidedWarning from '@/components/UndecidedWarning.vue';
+import { Button } from '@/components/ui/button';
 import { useExportStore } from '@/stores/export';
 import { useWizardStore } from '@/stores/wizard';
 import { storeToRefs } from 'pinia';
@@ -39,11 +40,11 @@ async function reauthorize() {
 </script>
 
 <template>
-  <section class="export-page">
-    <p v-if="loading">Loading preview…</p>
+  <section class="space-y-4">
+    <p v-if="loading" class="text-sm text-muted-foreground">Loading preview…</p>
 
     <template v-else-if="preview">
-      <p v-if="store.nothingToExport" class="empty">
+      <p v-if="store.nothingToExport" class="text-sm text-muted-foreground">
         Nothing to export — no contacts are decided <em>delete</em> and none are in the Processing
         Queue. Review some contacts first.
       </p>
@@ -57,32 +58,28 @@ async function reauthorize() {
           :contacts="preview.labelSet"
         />
 
-        <div v-if="!run" class="actions">
-          <button type="button" @click="run_">Start export</button>
+        <div v-if="!run">
+          <Button @click="run_">Start export</Button>
         </div>
 
-        <div v-else class="run">
-          <p class="hint" v-if="run.status === 'previewing'">
+        <div v-else class="space-y-3">
+          <p v-if="run.status === 'previewing'" class="text-sm text-muted-foreground">
             Deletion needs your explicit confirmation; labeling runs alongside automatically.
           </p>
-          <button
-            v-if="run.status === 'previewing'"
-            type="button"
-            class="confirm"
-            @click="confirm"
-          >
+          <Button v-if="run.status === 'previewing'" variant="destructive" @click="confirm">
             Confirm &amp; run export
-          </button>
+          </Button>
 
-          <div v-if="store.needsWriteScope" class="reauth">
-            <p class="error">
+          <div
+            v-if="store.needsWriteScope"
+            class="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-700/60 dark:bg-amber-950/40"
+          >
+            <p class="text-sm text-amber-900 dark:text-amber-200">
               Google hasn't granted write access to contacts for this account yet.
             </p>
-            <button type="button" class="reauth-btn" @click="reauthorize">
-              Allow Google access and continue
-            </button>
+            <Button @click="reauthorize">Allow Google access and continue</Button>
           </div>
-          <p v-else-if="error" class="error">{{ error }}</p>
+          <p v-else-if="error" class="text-sm text-destructive">{{ error }}</p>
 
           <ExportReport
             v-if="run.status !== 'previewing'"
@@ -98,19 +95,3 @@ async function reauthorize() {
     </template>
   </section>
 </template>
-
-<style scoped>
-.empty { color: #555; }
-.actions, .run { margin-top: 16px; }
-.error { color: #b00020; }
-.hint { color: #555; font-size: 0.9em; }
-.reauth { margin-top: 12px; }
-.reauth-btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
-  background: #1a73e8;
-  color: #fff;
-  cursor: pointer;
-}
-</style>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import type { Cluster } from '@/services/api';
 import { ref } from 'vue';
 import ConfidenceBadge from './ConfidenceBadge.vue';
@@ -19,38 +21,31 @@ function onConfirm(survivorId: string) {
 </script>
 
 <template>
-  <div class="cluster">
-    <header>
-      <ConfidenceBadge :confidence="cluster.confidence" />
-      <span class="size">{{ cluster.size }} contacts</span>
-    </header>
-    <ul class="members">
-      <li v-for="m in cluster.members" :key="m.workingCopyContactId">
-        <strong>{{ m.contact.displayName ?? '—' }}</strong>
-        <span>{{ m.contact.primaryEmail ?? '' }}</span>
-        <span>{{ m.contact.primaryPhone ?? '' }}</span>
-      </li>
-    </ul>
+  <Card>
+    <CardContent class="space-y-3 p-4">
+      <header class="flex items-center gap-2">
+        <ConfidenceBadge :confidence="cluster.confidence" />
+        <span class="text-sm text-muted-foreground">{{ cluster.size }} contacts</span>
+      </header>
+      <ul class="space-y-1 text-sm">
+        <li
+          v-for="m in cluster.members"
+          :key="m.workingCopyContactId"
+          class="flex flex-wrap gap-x-3"
+        >
+          <strong>{{ m.contact.displayName ?? '—' }}</strong>
+          <span class="text-muted-foreground">{{ m.contact.primaryEmail ?? '' }}</span>
+          <span class="text-muted-foreground">{{ m.contact.primaryPhone ?? '' }}</span>
+        </li>
+      </ul>
 
-    <div v-if="!showPreview" class="actions">
-      <button type="button" class="merge" @click="showPreview = true">Merge…</button>
-      <button type="button" class="dismiss" @click="emit('dismiss', cluster.id)">
-        Not a duplicate
-      </button>
-    </div>
-    <MergePreview
-      v-else
-      :cluster="cluster"
-      @confirm="onConfirm"
-      @cancel="showPreview = false"
-    />
-  </div>
+      <div v-if="!showPreview" class="flex gap-2">
+        <Button size="sm" @click="showPreview = true">Merge…</Button>
+        <Button size="sm" variant="outline" @click="emit('dismiss', cluster.id)">
+          Not a duplicate
+        </Button>
+      </div>
+      <MergePreview v-else :cluster="cluster" @confirm="onConfirm" @cancel="showPreview = false" />
+    </CardContent>
+  </Card>
 </template>
-
-<style scoped>
-.cluster { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
-header { display: flex; gap: 8px; align-items: center; }
-.members { list-style: none; padding: 0; }
-.members li { display: flex; gap: 12px; }
-.actions { display: flex; gap: 8px; }
-</style>
