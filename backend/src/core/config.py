@@ -73,6 +73,19 @@ class Settings(BaseSettings):
     # pacing (default; tests). Set e.g. 0.75 on the worker for large bulk exports to avoid 429 storms.
     export_write_min_interval_seconds: float = 0.0
 
+    # Validate & Normalize / Tidy (feature 006). All checks run on the editable Draft only and stay
+    # reversible (StagedEdit); no Google write, no new OAuth scope.
+    # Default region to parse national-format phone numbers when a run supplies none (research D2).
+    # `+E.164` numbers ignore this. The operator's chosen region is sent per-run from the UI.
+    phone_default_region: str = "KZ"
+    # Website reachability: per-request timeout, bounded fan-out, and redirect-hop cap (research D5/D6).
+    website_check_timeout_seconds: float = 5.0
+    website_check_concurrency: int = 8
+    website_check_max_redirects: int = 5
+    # Optional local GeoLite2-Country DB for initial region detection from a PUBLIC client IP
+    # (research D3). Empty ⇒ detection returns null and the frontend falls back to browser locale.
+    geoip_db_path: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

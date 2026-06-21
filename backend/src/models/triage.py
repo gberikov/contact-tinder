@@ -31,7 +31,7 @@ from src.models.base import Base, JsonB, created_ts, utcnow, uuid_pk
 SESSION_STATES = ("in_progress", "complete")
 OUTCOMES = ("keep", "delete", "process")
 PROCESSING_STATES = ("pending", "done")
-EDIT_KINDS = ("edit", "transliterate")
+EDIT_KINDS = ("edit", "transliterate", "normalize")  # "normalize" = feature 006 Tidy auto-fix
 EDIT_STATES = ("active", "undone")
 BATCH_STATES = ("staged", "previewed", "committing", "committed", "failed", "undoing", "undone")
 DELETION_STATES = ("pending", "deleted", "skipped_absent", "failed", "restored")
@@ -136,7 +136,7 @@ class StagedEdit(Base):
     working_copy_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("working_copy.id", ondelete="CASCADE"), nullable=False
     )
-    # edit | transliterate
+    # edit | transliterate | normalize (normalize = feature 006 Tidy auto-fix / queue resolution)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     payload_before: Mapped[dict] = mapped_column(JsonB, nullable=False)
     payload_after: Mapped[dict] = mapped_column(JsonB, nullable=False)

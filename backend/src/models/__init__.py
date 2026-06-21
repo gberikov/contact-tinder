@@ -13,6 +13,7 @@ from src.models.triage import (
     TriageDecision,
     TriageSession,
 )
+from src.models.validation import ValidationItem, ValidationRun
 from src.models.working_copy import WorkingCopy, WorkingCopyContact
 
 __all__ = [
@@ -39,4 +40,6 @@ __all__ = [
     "LabelBatch",
     "LabelAssignment",
     "ContactLabel",
+    "ValidationRun",
+    "ValidationItem",
 ]

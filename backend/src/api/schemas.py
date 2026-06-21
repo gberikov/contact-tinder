@@ -310,3 +310,55 @@ class ExportRunOut(BaseModel):
     createdAt: datetime
     completedAt: datetime | None = None
     report: ExportReportOut
+
+
+# ---- Validate & Normalize / Tidy (feature 006) --------------------------------------------
+
+class StartValidationBody(BaseModel):
+    sessionId: uuid.UUID | None = None
+    # ISO-3166 alpha-2 region for parsing national-format phones; falls back to phone_default_region.
+    defaultRegion: str | None = None
+
+
+class ValidationRunOut(BaseModel):
+    id: uuid.UUID
+    workingCopyId: uuid.UUID
+    sessionId: uuid.UUID | None = None
+    status: str
+    defaultRegion: str | None = None
+    checkedCount: int
+    autoAppliedCount: int
+    queuedCount: int
+    # Derived (not stored): live count of items still status='pending' (drives the passable warning).
+    pendingCount: int
+    lastError: str | None = None
+    createdAt: datetime
+    startedAt: datetime | None = None
+    completedAt: datetime | None = None
+
+
+class ValidationItemOut(BaseModel):
+    id: uuid.UUID
+    workingCopyContactId: uuid.UUID
+    contactDisplayName: str | None = None
+    fieldKind: str
+    fieldIndex: int
+    issueType: str
+    originalValue: str
+    suggestedValue: str | None = None
+    status: str
+    stagedEditId: uuid.UUID | None = None
+    createdAt: datetime
+    resolvedAt: datetime | None = None
+
+
+class ResolveValidationItemBody(BaseModel):
+    # exactly one action: "set_type" (+type) | "edit_value" (+value) | "remove_field"
+    action: str
+    type: str | None = None
+    value: str | None = None
+
+
+class DetectRegionOut(BaseModel):
+    region: str | None = None
+    source: str  # "geoip" | "none"

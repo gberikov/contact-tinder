@@ -15,6 +15,10 @@ dependencies = [
     "google-api-python-client>=2.130",
     "google-auth-oauthlib>=1.2",
     "google-auth>=2.30",
+    # Feature 006 (validate & normalize):
+    "phonenumbers>=8.13",        # libphonenumber port — E.164 + validity + number type
+    "email-validator>=2.1",      # email syntax + MX deliverability (pulls dnspython)
+    "httpx>=0.27",               # website reachability checks (now runtime, not just dev)
 ]
 
 [project.optional-dependencies]
@@ -22,6 +26,11 @@ dev = [
     "pytest>=8.2",
     "httpx>=0.27",
     "respx>=0.21",
+]
+# Optional: server-side IP→region detection for the default phone-parsing region (feature 006).
+# Falls back to browser locale/timezone when absent (research D3). Operator supplies the GeoLite2 DB.
+geoip = [
+    "geoip2>=4.8",
 ]
 # Spark/Zingg dedup engine. In the `dedup` container these come from the official zingg/zingg
 # image (NOT pip); this group is only for running the engine locally outside that image. Never CI.

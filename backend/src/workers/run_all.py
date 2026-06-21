@@ -11,7 +11,7 @@ import time
 
 from src.core.db import SessionLocal
 from src.core.logging import configure_logging
-from src.workers import delete_worker, import_worker, label_worker
+from src.workers import delete_worker, import_worker, label_worker, validation_worker
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ def main() -> None:  # pragma: no cover - long-running loop
             ("import", import_worker.run_once),
             ("delete", delete_worker.run_once),
             ("label", label_worker.run_once),
+            ("validation", validation_worker.run_once),
         ):
             with SessionLocal() as session:
                 try:
