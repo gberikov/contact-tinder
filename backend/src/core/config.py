@@ -59,6 +59,20 @@ class Settings(BaseSettings):
     # NOTE: like merge-undo, staged-edit and delete undo have NO timed expiry — they are reversible for
     # the life of the working copy (research D12). Do not add an expiry knob without an amendment.
 
+    # Export to Google (feature 004). The `Process` label is a Google CONTACT GROUP; ensuring/assigning
+    # it reuses the SAME `google_contacts_write_scope` above — NO new OAuth scope is added (research D1),
+    # and `account_has_write_scope` gates labeling too. Label undo also has NO timed expiry (research D8).
+    process_label_name: str = "Process"
+    # Worker durability for large exports: commit progress every N records (so deleted/labeled counts
+    # advance live and a crash never loses more than one chunk), and retry a record up to N attempts
+    # on a Google rate-limit / transient error (with backoff) before marking it failed.
+    export_commit_chunk_size: int = 50
+    export_max_attempts: int = 5
+    # Pace Google write calls (seconds between deletes/label-adds) to stay under the People API
+    # write quota (~90 writes/min/user, shared by contact deletes + contact-group writes). 0 = no
+    # pacing (default; tests). Set e.g. 0.75 on the worker for large bulk exports to avoid 429 storms.
+    export_write_min_interval_seconds: float = 0.0
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -121,6 +121,20 @@ class PeopleWriteClient(Protocol):
         """Re-create a contact from a captured Person payload; return its new resourceName."""
         ...
 
+    # ---- Label / contact-group write (feature 004) -----------------------------------------
+    # Reuses the SAME `…/auth/contacts` scope as delete (research D1 — no new OAuth scope).
+    def ensure_label(self, name: str) -> str:
+        """Ensure a contact group named `name` exists; return its resourceName (create-or-reuse)."""
+        ...
+
+    def add_label_members(self, group_resource_name: str, resource_names: list[str]) -> None:
+        """Add contacts to the group. Raise ContactNotFoundError if a contact is absent (FR-012a)."""
+        ...
+
+    def remove_label_members(self, group_resource_name: str, resource_names: list[str]) -> None:
+        """Remove contacts from the group (undo). Raise ContactNotFoundError if absent."""
+        ...
+
 
 class GooglePeopleWriteClient:
     """Google-backed write client. Requires the `…/auth/contacts` scope (research D8/D9)."""
@@ -175,15 +189,90 @@ class GooglePeopleWriteClient:
             raise
         return created["resourceName"]
 
+    # ---- Label / contact-group write (feature 004) -----------------------------------------
+
+    def ensure_label(self, name: str) -> str:  # pragma: no cover - integration env
+        from googleapiclient.errors import HttpError
+
+        service = self._service()
+        try:
+            existing = service.contactGroups().list(pageSize=1000).execute()
+            for group in existing.get("contactGroups", []):
+                if group.get("name") == name and group.get("groupType") == "USER_CONTACT_GROUP":
+                    return group["resourceName"]
+            created = (
+                service.contactGroups()
+                .create(body={"contactGroup": {"name": name}})
+                .execute()
+            )
+        except HttpError as exc:
+            raise self._map_error(exc) from exc
+        return created["resourceName"]
+
+    def add_label_members(
+        self, group_resource_name: str, resource_names: list[str]
+    ) -> None:  # pragma: no cover - integration env
+        self._modify_members(group_resource_name, add=resource_names, remove=[])
+
+    def remove_label_members(
+        self, group_resource_name: str, resource_names: list[str]
+    ) -> None:  # pragma: no cover - integration env
+        self._modify_members(group_resource_name, add=[], remove=resource_names)
+
+    def _modify_members(
+        self, group_resource_name: str, *, add: list[str], remove: list[str]
+    ) -> None:  # pragma: no cover - integration env
+        from googleapiclient.errors import HttpError
+
+        body: dict = {}
+        if add:
+            body["resourceNamesToAdd"] = add
+        if remove:
+            body["resourceNamesToRemove"] = remove
+        try:
+            result = (
+                self._service()
+                .contactGroups()
+                .members()
+                .modify(resourceName=group_resource_name, body=body)
+                .execute()
+            )
+        except HttpError as exc:
+            raise self._map_error(exc) from exc
+        # members.modify reports absent contacts in-band rather than via 404.
+        requested = set(add) | set(remove)
+        not_found = set(result.get("notFoundResourceNames", []))
+        if requested and requested <= not_found:
+            raise ContactNotFoundError(next(iter(requested)))
+
+    @staticmethod
+    def _map_error(exc) -> Exception:  # pragma: no cover - integration env
+        status = getattr(exc.resp, "status", None)
+        if status == 404:
+            return ContactNotFoundError()
+        if status == 429:
+            retry_after = exc.resp.get("retry-after") if exc.resp else None
+            return RateLimitedError(float(retry_after) if retry_after else None)
+        if status in (401, 403):
+            return AuthError()
+        if status and 500 <= int(status) < 600:
+            return TransientError()
+        return exc
+
 
 class FakePeopleWriteClient:
-    """In-memory write client for CI. Records deletes/creates; can simulate absent contacts."""
+    """In-memory write client for CI. Records deletes/creates, group create + membership."""
 
     def __init__(self, *, absent: set[str] | None = None):
         self.absent = set(absent or ())
         self.deleted: list[str] = []
         self.created: dict[str, dict] = {}
         self._seq = 0
+        # Label / contact-group state (feature 004).
+        self.groups: dict[str, str] = {}  # name -> group resourceName
+        self.created_groups: list[str] = []  # records each CREATE (assert ensured-once)
+        self.group_members: dict[str, set[str]] = {}  # group resourceName -> member resourceNames
+        self._group_seq = 0
 
     def delete_contact(self, resource_name: str) -> None:
         if resource_name in self.absent:
@@ -195,6 +284,29 @@ class FakePeopleWriteClient:
         rn = f"people/restored{self._seq}"
         self.created[rn] = payload
         return rn
+
+    def ensure_label(self, name: str) -> str:
+        if name not in self.groups:
+            self._group_seq += 1
+            rn = f"contactGroups/{name}-{self._group_seq}"
+            self.groups[name] = rn
+            self.group_members[rn] = set()
+            self.created_groups.append(rn)
+        return self.groups[name]
+
+    def add_label_members(self, group_resource_name: str, resource_names: list[str]) -> None:
+        members = self.group_members.setdefault(group_resource_name, set())
+        for rn in resource_names:
+            if rn in self.absent:
+                raise ContactNotFoundError(rn)
+            members.add(rn)
+
+    def remove_label_members(self, group_resource_name: str, resource_names: list[str]) -> None:
+        members = self.group_members.setdefault(group_resource_name, set())
+        for rn in resource_names:
+            if rn in self.absent:
+                raise ContactNotFoundError(rn)
+            members.discard(rn)
 
 
 def get_write_client(kind: str, *, credentials=None) -> PeopleWriteClient:

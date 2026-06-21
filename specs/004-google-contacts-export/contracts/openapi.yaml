@@ -1,0 +1,224 @@
+openapi: 3.1.0
+info:
+  title: Contact Tinder — Google Contacts Export API
+  version: 0.1.0
+  description: >
+    Backend REST API for feature 004-google-contacts-export. Commits the staged triage results of a
+    working copy (feature 003) to Google as two write actions, surfaced on one Export screen and run as
+    a background job: (1) DELETE the active survivors whose latest decision is `delete` — reusing
+    feature 003's snapshot-protected, confirmed, idempotent, undoable DeleteBatch path; and (2) LABEL the
+    active survivors routed to the Processing Queue (and not deleted) with a `Process` Google contact
+    group, so the operator can filter and re-check them by hand. The label write is idempotent,
+    reversible, and treats an absent contact (404) as already-satisfied. Staged edits/transliterations
+    are NOT pushed. Both writes reuse the `…/auth/contacts` scope already granted in feature 003 — no new
+    scope. Undecided survivors are warned and excluded. All access is scoped to a working copy/account.
+servers:
+  - url: /api
+
+paths:
+  /working-copies/{workingCopyId}/export/preview:
+    get:
+      summary: Preview the export — counts + dry-run lists for delete and label, plus undecided warning
+      operationId: previewExport
+      parameters:
+        - $ref: "#/components/parameters/WorkingCopyId"
+        - name: sessionId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Derived sets (nothing written to Google)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExportPreview" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /working-copies/{workingCopyId}/export:
+    post:
+      summary: Start an export run — creates the delete batch (staged) and label batch (staged)
+      operationId: startExport
+      parameters: [ { $ref: "#/components/parameters/WorkingCopyId" } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StartExportBody" }
+      responses:
+        "201":
+          description: Export run created with its (staged) batches
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExportRun" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /export-runs/{exportRunId}:
+    get:
+      summary: Get an export run with its aggregated report
+      operationId: getExportRun
+      parameters: [ { $ref: "#/components/parameters/ExportRunId" } ]
+      responses:
+        "200":
+          description: Export run + report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExportRun" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /export-runs/{exportRunId}/confirm-delete:
+    post:
+      summary: Explicitly confirm the deletion half (required) and enqueue both batches to the worker
+      description: >
+        Confirms the linked DeleteBatch (scope-gated; 403 if the account lacks the write scope) and
+        enqueues it (`committing`) plus the linked LabelBatch (`labeling`) for the background worker.
+        Labeling does NOT require a separate confirmation. If there is no delete set, this simply
+        enqueues labeling. Returns the run in `running` status.
+      operationId: confirmExportDelete
+      parameters: [ { $ref: "#/components/parameters/ExportRunId" } ]
+      responses:
+        "202":
+          description: Accepted — batches enqueued; worker progresses them
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExportRun" }
+        "403": { $ref: "#/components/responses/WriteScopeRequired" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /export-runs/{exportRunId}/undo-delete:
+    post:
+      summary: Undo the deletion half (restore deleted contacts from snapshots, FR-009)
+      operationId: undoExportDelete
+      parameters: [ { $ref: "#/components/parameters/ExportRunId" } ]
+      responses:
+        "202":
+          description: Accepted — restore enqueued
+          content: { application/json: { schema: { $ref: "#/components/schemas/ExportRun" } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /export-runs/{exportRunId}/undo-label:
+    post:
+      summary: Undo the label half (remove the `Process` membership, FR-014)
+      operationId: undoExportLabel
+      parameters: [ { $ref: "#/components/parameters/ExportRunId" } ]
+      responses:
+        "202":
+          description: Accepted — unlabeling enqueued
+          content: { application/json: { schema: { $ref: "#/components/schemas/ExportRun" } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  parameters:
+    WorkingCopyId:
+      name: workingCopyId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ExportRunId:
+      name: exportRunId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    NotFound:
+      description: Resource not found (or not visible to this account — isolation, FR-021)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Conflict:
+      description: Invalid state for the requested transition (e.g. nothing to export, wrong status)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    WriteScopeRequired:
+      description: The account lacks the `…/auth/contacts` write scope — re-consent needed (FR-020)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: write_scope_required }
+        message: { type: string }
+
+    StartExportBody:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: Triage session to source decisions from; defaults to the most recent.
+
+    ContactSummary:
+      type: object
+      description: Redacted display summary of a contact (no secrets).
+      properties:
+        workingCopyContactId: { type: string, format: uuid }
+        displayName: { type: string, nullable: true }
+        primaryEmail: { type: string, nullable: true }
+        primaryPhone: { type: string, nullable: true }
+        organization: { type: string, nullable: true }
+
+    ExportPreview:
+      type: object
+      description: Dry-run derivation of both sets; nothing has been written to Google.
+      required: [workingCopyId, deleteCount, labelCount, undecidedCount, nothingToExport]
+      properties:
+        workingCopyId: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid, nullable: true }
+        deleteCount: { type: integer }
+        labelCount: { type: integer }
+        undecidedCount:
+          type: integer
+          description: Active survivors with no terminal decision — warned and excluded (FR-017a).
+        nothingToExport:
+          type: boolean
+          description: True when both sets are empty (FR-017 empty state).
+        labelName: { type: string, example: Process }
+        deleteSet:
+          type: array
+          items: { $ref: "#/components/schemas/ContactSummary" }
+        labelSet:
+          type: array
+          items: { $ref: "#/components/schemas/ContactSummary" }
+
+    ExportRun:
+      type: object
+      required: [id, workingCopyId, accountId, status, report]
+      properties:
+        id: { type: string, format: uuid }
+        workingCopyId: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid, nullable: true }
+        deleteBatchId: { type: string, format: uuid, nullable: true }
+        labelBatchId: { type: string, format: uuid, nullable: true }
+        status:
+          type: string
+          enum: [previewing, running, completed, failed]
+        undecidedCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+        report: { $ref: "#/components/schemas/ExportReport" }
+
+    ExportReport:
+      type: object
+      description: Aggregated per-action outcome over the linked batches (FR-018). Redacted.
+      required: [deleted, skippedAbsentDelete, labeled, skippedAbsentLabel, failed, excluded]
+      properties:
+        deleted: { type: integer }
+        skippedAbsentDelete: { type: integer }
+        labeled: { type: integer }
+        skippedAbsentLabel: { type: integer }
+        failed: { type: integer }
+        excluded:
+          type: integer
+          description: Contacts excluded because no longer active / undecided (FR-003/017a).
+        deleteStatus:
+          type: string
+          nullable: true
+          enum: [staged, previewed, committing, committed, failed, undoing, undone]
+        labelStatus:
+          type: string
+          nullable: true
+          enum: [staged, labeling, committed, failed, unlabeling, undone]

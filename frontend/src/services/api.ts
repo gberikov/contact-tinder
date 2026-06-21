@@ -217,6 +217,53 @@ export interface DeletionRecord {
   error?: string | null;
 }
 
+// ---- Export to Google (feature 004) -------------------------------------------------------
+
+export interface ExportContactSummary {
+  workingCopyContactId: string;
+  displayName?: string | null;
+  primaryEmail?: string | null;
+  primaryPhone?: string | null;
+  organization?: string | null;
+}
+
+export interface ExportPreview {
+  workingCopyId: string;
+  sessionId?: string | null;
+  deleteCount: number;
+  labelCount: number;
+  undecidedCount: number;
+  nothingToExport: boolean;
+  labelName: string;
+  deleteSet: ExportContactSummary[];
+  labelSet: ExportContactSummary[];
+}
+
+export interface ExportReport {
+  deleted: number;
+  skippedAbsentDelete: number;
+  labeled: number;
+  skippedAbsentLabel: number;
+  failed: number;
+  excluded: number;
+  deleteStatus?: string | null;
+  labelStatus?: string | null;
+}
+
+export interface ExportRun {
+  id: string;
+  workingCopyId: string;
+  accountId: string;
+  sessionId?: string | null;
+  deleteBatchId?: string | null;
+  labelBatchId?: string | null;
+  status: 'previewing' | 'running' | 'completed' | 'failed';
+  undecidedCount: number;
+  createdAt: string;
+  completedAt?: string | null;
+  report: ExportReport;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -251,6 +298,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   listAccounts: () => request<Account[]>('/accounts'),
   connect: () => request<{ authorizationUrl: string }>('/accounts/connect', { method: 'POST' }),
+  // Incremental consent: re-authorize the connected account WITH the contacts write scope, then
+  // come back to `returnTo` (e.g. the Export screen). Used to clear a 403 write_scope_required.
+  grantWriteAccess: (returnTo?: string) =>
+    request<{ authorizationUrl: string }>('/accounts/grant-write', {
+      method: 'POST',
+      body: JSON.stringify({ returnTo }),
+    }),
   disconnect: (id: string) => request<void>(`/accounts/${id}`, { method: 'DELETE' }),
 
   createSnapshot: (accountId: string, label?: string) =>
@@ -360,4 +414,22 @@ export const api = {
     request<DeleteBatch>(`/delete-batches/${batchId}/confirm`, { method: 'POST' }),
   undoDeleteBatch: (batchId: string) =>
     request<DeleteBatch>(`/delete-batches/${batchId}/undo`, { method: 'POST' }),
+
+  // Export to Google (feature 004)
+  previewExport: (workingCopyId: string, sessionId?: string) =>
+    request<ExportPreview>(
+      `/working-copies/${workingCopyId}/export/preview${sessionId ? `?sessionId=${sessionId}` : ''}`,
+    ),
+  startExport: (workingCopyId: string, sessionId?: string) =>
+    request<ExportRun>(`/working-copies/${workingCopyId}/export`, {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    }),
+  getExportRun: (runId: string) => request<ExportRun>(`/export-runs/${runId}`),
+  confirmExportDelete: (runId: string) =>
+    request<ExportRun>(`/export-runs/${runId}/confirm-delete`, { method: 'POST' }),
+  undoExportDelete: (runId: string) =>
+    request<ExportRun>(`/export-runs/${runId}/undo-delete`, { method: 'POST' }),
+  undoExportLabel: (runId: string) =>
+    request<ExportRun>(`/export-runs/${runId}/undo-label`, { method: 'POST' }),
 };

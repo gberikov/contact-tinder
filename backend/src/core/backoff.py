@@ -29,3 +29,22 @@ def next_delay(
 def should_retry(attempt: int, max_attempts: int) -> bool:
     """True while another retry is permitted (ceiling enforces transient -> failed, A1)."""
     return attempt < max_attempts
+
+
+def retry_call(fn, *, max_attempts, retry_on, sleep, retry_after_attr="retry_after"):
+    """Call ``fn`` with exponential backoff, retrying ONLY ``retry_on`` exceptions.
+
+    Any other exception propagates immediately (e.g. a 404 the caller maps to skipped). The last
+    retryable error is re-raised once the attempt ceiling is hit, so the caller can mark the unit
+    'failed'. ``sleep`` is injected so tests run without real delays. An explicit ``retry_after`` on
+    the exception (e.g. a 429 Retry-After) is honored.
+    """
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return fn()
+        except retry_on as exc:
+            if not should_retry(attempt, max_attempts):
+                raise
+            sleep(next_delay(attempt, retry_after=getattr(exc, retry_after_attr, None)))

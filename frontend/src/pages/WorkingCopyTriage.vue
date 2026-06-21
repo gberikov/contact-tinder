@@ -37,6 +37,7 @@ function startOver() {
     <nav v-if="session" class="links">
       <RouterLink :to="`/triage-sessions/${session.id}/processing`">Processing queue</RouterLink>
       <RouterLink :to="`/working-copies/${workingCopyId}/delete-review`">Review deletions</RouterLink>
+      <RouterLink :to="`/working-copies/${workingCopyId}/export`">Export to Google</RouterLink>
     </nav>
   </section>
 </template>

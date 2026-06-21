@@ -36,5 +36,10 @@ export const router = createRouter({
       name: 'delete-review',
       component: () => import('@/pages/DeleteReview.vue'),
     },
+    {
+      path: '/working-copies/:id/export',
+      name: 'working-copy-export',
+      component: () => import('@/pages/Export.vue'),
+    },
   ],
 });

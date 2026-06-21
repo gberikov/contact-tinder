@@ -3,7 +3,7 @@ import DeleteBatchReview from '@/components/DeleteBatchReview.vue';
 import { useTriageStore } from '@/stores/triage';
 import { storeToRefs } from 'pinia';
 import { onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 
 const route = useRoute();
 const workingCopyId = route.params.id as string;
@@ -29,5 +29,12 @@ onMounted(async () => {
       @confirm="store.confirmDelete()"
       @undo="store.undoDelete()"
     />
+    <nav class="links">
+      <RouterLink :to="`/working-copies/${workingCopyId}/export`">Export to Google →</RouterLink>
+    </nav>
   </section>
 </template>
+
+<style scoped>
+.links { margin-top: 20px; }
+</style>

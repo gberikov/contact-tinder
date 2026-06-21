@@ -3,6 +3,7 @@ from src.models.account import Account, Credential
 from src.models.audit import AuditEntry
 from src.models.base import Base
 from src.models.dedup import ClusterMember, DedupRun, DuplicateCluster, MergeRecord
+from src.models.export import ContactLabel, ExportRun, LabelAssignment, LabelBatch
 from src.models.snapshot import ImportJob, Snapshot, SnapshotContact
 from src.models.triage import (
     DeleteBatch,
@@ -34,4 +35,8 @@ __all__ = [
     "StagedEdit",
     "DeleteBatch",
     "DeletionRecord",
+    "ExportRun",
+    "LabelBatch",
+    "LabelAssignment",
+    "ContactLabel",
 ]

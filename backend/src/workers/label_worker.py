@@ -1,10 +1,10 @@
-"""PostgreSQL-backed delete-batch worker (feature 003, research D10).
+"""PostgreSQL-backed label-batch worker (feature 004, research D6).
 
-Claims `committing` (delete) and `undoing` (restore) DeleteBatch rows with FOR UPDATE SKIP LOCKED
+Claims `labeling` (assign) and `unlabeling` (remove) LabelBatch rows with FOR UPDATE SKIP LOCKED
 (PostgreSQL stays the only datastore — no Redis), builds an authorized PeopleWriteClient per account,
 and runs the batch to a terminal state idempotently. Runs inside the existing `worker` service —
 no new container. The default client is the Google-free fake; set PEOPLE_WRITE_CLIENT=google to use
-the real Google write path.
+the real Google contact-group write path (same `…/auth/contacts` scope as delete — research D1).
 """
 from __future__ import annotations
 
@@ -19,25 +19,25 @@ from src.core.db import SessionLocal
 from src.core.logging import configure_logging
 from src.integrations.people_client import PeopleWriteClient, get_write_client
 from src.models.account import Account
-from src.models.triage import DeleteBatch
-from src.services import crypto, delete_batch_service
+from src.models.export import LabelBatch
+from src.services import crypto, label_batch_service
 
 logger = logging.getLogger(__name__)
-_ACTIVE = ("committing", "undoing")
+_ACTIVE = ("labeling", "unlabeling")
 
 
-def claim_next_batch(session: Session) -> DeleteBatch | None:
+def claim_next_batch(session: Session) -> LabelBatch | None:
     stmt = (
-        select(DeleteBatch)
-        .where(DeleteBatch.status.in_(_ACTIVE))
-        .order_by(DeleteBatch.created_at)
+        select(LabelBatch)
+        .where(LabelBatch.status.in_(_ACTIVE))
+        .order_by(LabelBatch.created_at)
         .limit(1)
         .with_for_update(skip_locked=True)
     )
     return session.scalar(stmt)
 
 
-def build_write_client(session: Session, batch: DeleteBatch) -> PeopleWriteClient:
+def build_write_client(session: Session, batch: LabelBatch) -> PeopleWriteClient:
     settings = get_settings()
     if settings.people_write_client != "google":
         return get_write_client("fake")
@@ -62,22 +62,22 @@ def run_once(session: Session) -> bool:
     if batch is None:
         return False
     client = build_write_client(session, batch)
-    if batch.status == "undoing":
-        delete_batch_service.process_undo(session, batch.id, client)
+    if batch.status == "unlabeling":
+        label_batch_service.process_undo(session, batch.id, client)
     else:
-        delete_batch_service.process_batch(session, batch.id, client)
+        label_batch_service.process_batch(session, batch.id, client)
     return True
 
 
 def main() -> None:  # pragma: no cover - long-running loop
     configure_logging()
-    logger.info("delete worker started (client=%s)", get_settings().people_write_client)
+    logger.info("label worker started (client=%s)", get_settings().people_write_client)
     while True:
         with SessionLocal() as session:
             try:
                 worked = run_once(session)
             except Exception:  # noqa: BLE001 - keep worker alive
-                logger.exception("delete batch iteration failed")
+                logger.exception("label batch iteration failed")
                 worked = False
         if not worked:
             time.sleep(2)

@@ -10,6 +10,8 @@ if not os.environ.get("TOKEN_ENCRYPTION_KEY"):
 
     os.environ["TOKEN_ENCRYPTION_KEY"] = Fernet.generate_key().decode()
 
+from dataclasses import replace  # noqa: E402
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
@@ -62,6 +64,8 @@ def db(Session):
 
 
 class FakeOAuthProvider:
+    _WRITE_SCOPE = "https://www.googleapis.com/auth/contacts"
+
     def __init__(self):
         self._next = OAuthResult(
             google_account_id="g-1",
@@ -71,14 +75,20 @@ class FakeOAuthProvider:
             expiry=None,
             scopes=["https://www.googleapis.com/auth/contacts.readonly"],
         )
+        self._write_requested = False
 
     def set_result(self, result: OAuthResult) -> None:
         self._next = result
 
-    def authorization_url(self, state: str) -> str:
-        return f"https://accounts.google.com/o/oauth2/auth?state={state}"
+    def authorization_url(self, state: str, *, write: bool = False) -> str:
+        self._write_requested = write
+        suffix = "&scope=contacts" if write else ""
+        return f"https://accounts.google.com/o/oauth2/auth?state={state}{suffix}"
 
     def exchange(self, code: str, state: str) -> OAuthResult:
+        # Simulate Google granting the write scope when it was requested (incremental consent).
+        if self._write_requested and self._WRITE_SCOPE not in self._next.scopes:
+            return replace(self._next, scopes=[*self._next.scopes, self._WRITE_SCOPE])
         return self._next
 
 

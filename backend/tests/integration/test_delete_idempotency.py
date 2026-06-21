@@ -41,14 +41,14 @@ def test_reprocess_does_not_redelete(db):
 
 
 class _FlakyClient(FakePeopleWriteClient):
+    """Fails one resource on EVERY attempt (outlasting the retry ceiling → failed)."""
+
     def __init__(self, fail_resource):
         super().__init__()
         self._fail_resource = fail_resource
-        self._failed_once = False
 
     def delete_contact(self, resource_name):
-        if resource_name == self._fail_resource and not self._failed_once:
-            self._failed_once = True
+        if resource_name == self._fail_resource:
             raise TransientError()
         super().delete_contact(resource_name)
 
@@ -56,11 +56,12 @@ class _FlakyClient(FakePeopleWriteClient):
 def test_partial_failure_then_retry_completes(db):
     batch, contacts = _setup(db, 2)
     flaky = _FlakyClient(contacts[0].origin_resource_name)
-    delete_batch_service.process_batch(db, batch.id, flaky)
+    # sleep injected so the backoff retries don't actually wait.
+    delete_batch_service.process_batch(db, batch.id, flaky, sleep=lambda _: None)
     db.refresh(batch)
     assert batch.status == "failed" and batch.failed_count == 1
 
     # Retry with a healthy client finishes only the outstanding record.
-    delete_batch_service.process_batch(db, batch.id, FakePeopleWriteClient())
+    delete_batch_service.process_batch(db, batch.id, FakePeopleWriteClient(), sleep=lambda _: None)
     db.refresh(batch)
     assert batch.status == "committed" and batch.failed_count == 0 and batch.deleted_count == 2

@@ -24,7 +24,7 @@ class OAuthResult:
 
 
 class OAuthProvider(Protocol):
-    def authorization_url(self, state: str) -> str: ...
+    def authorization_url(self, state: str, *, write: bool = False) -> str: ...
     def exchange(self, code: str, state: str) -> OAuthResult: ...
 
 
@@ -35,10 +35,15 @@ class GoogleOAuthProvider:
         # PKCE code_verifier per state — generated at authorization_url, reused at exchange.
         self._verifiers: dict[str, str | None] = {}
 
-    def _flow(self, code_verifier: str | None = None):
+    def _flow(self, code_verifier: str | None = None, *, write: bool = False):
         from google_auth_oauthlib.flow import Flow
 
         s = get_settings()
+        # Incremental consent: when the operator enables the export's writes, ALSO request the
+        # contacts write scope (research D1 — same scope covers delete + the `Process` label).
+        scopes = list(s.google_scopes)
+        if write and s.google_contacts_write_scope not in scopes:
+            scopes.append(s.google_contacts_write_scope)
         return Flow.from_client_config(
             {
                 "web": {
@@ -49,13 +54,13 @@ class GoogleOAuthProvider:
                     "redirect_uris": [s.google_oauth_redirect_uri],
                 }
             },
-            scopes=list(s.google_scopes),
+            scopes=scopes,
             redirect_uri=s.google_oauth_redirect_uri,
             code_verifier=code_verifier,
         )
 
-    def authorization_url(self, state: str) -> str:  # pragma: no cover - needs google env
-        flow = self._flow()
+    def authorization_url(self, state: str, *, write: bool = False) -> str:  # pragma: no cover - needs google env
+        flow = self._flow(write=write)
         url, _ = flow.authorization_url(
             access_type="offline", include_granted_scopes="true", prompt="consent", state=state
         )
@@ -85,5 +90,19 @@ class GoogleOAuthProvider:
             refresh_token=creds.refresh_token,
             access_token=creds.token,
             expiry=creds.expiry,
-            scopes=list(creds.scopes or get_settings().google_scopes),
+            scopes=self._granted_scopes(flow, creds),
         )
+
+    @staticmethod
+    def _granted_scopes(flow, creds) -> list[str]:  # pragma: no cover - needs google env
+        """The scopes Google ACTUALLY granted — from the token response, not the requested set.
+
+        The token response's `scope` reflects what the user approved (incl. an incremental grant
+        like the contacts write scope). `creds.scopes` only mirrors the scopes the flow was built
+        with, so reading it would silently drop a newly-granted write scope.
+        """
+        token = getattr(flow.oauth2session, "token", None) or {}
+        granted = token.get("scope") or getattr(creds, "scopes", None)
+        if isinstance(granted, str):
+            granted = granted.split()
+        return list(granted) if granted else list(get_settings().google_scopes)
