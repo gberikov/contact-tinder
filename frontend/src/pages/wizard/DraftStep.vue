@@ -2,6 +2,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ActiveSelector from '@/components/wizard/ActiveSelector.vue';
+import ConfirmDialog from '@/components/wizard/ConfirmDialog.vue';
 import type { SelectorItem } from '@/components/wizard/types';
 import { api } from '@/services/api';
 import { useWizardStore } from '@/stores/wizard';
@@ -40,6 +41,24 @@ async function createDraft() {
 function select(id: string) {
   wizard.setActiveDraft(id);
 }
+
+const pending = ref<{ id: string; title: string } | null>(null);
+
+function askDelete(id: string) {
+  const draft = wizard.workingCopies.find((w) => w.id === id);
+  pending.value = { id, title: draft?.label || `Draft ${id.slice(0, 8)}` };
+}
+
+async function confirmDelete() {
+  if (!pending.value) return;
+  const id = pending.value.id;
+  pending.value = null;
+  try {
+    await wizard.deleteDraft(id);
+  } catch (e) {
+    error.value = (e as Error).message;
+  }
+}
 </script>
 
 <template>
@@ -48,8 +67,19 @@ function select(id: string) {
     <ActiveSelector
       :items="items"
       :active-id="wizard.activeWorkingCopyId"
+      deletable
       empty-text="No drafts yet — create one to start editing safely."
       @select="select"
+      @delete="askDelete"
+    />
+
+    <ConfirmDialog
+      :open="pending !== null"
+      :title="`Delete ${pending?.title ?? ''}?`"
+      description="This deletes the draft and all its merge, review, and export data. This cannot be undone."
+      confirm-text="Delete draft"
+      @update:open="(v) => { if (!v) pending = null; }"
+      @confirm="confirmDelete"
     />
     <div class="flex items-end gap-2">
       <div class="flex-1 space-y-1">

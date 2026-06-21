@@ -2,6 +2,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ActiveSelector from '@/components/wizard/ActiveSelector.vue';
+import ConfirmDialog from '@/components/wizard/ConfirmDialog.vue';
 import type { SelectorItem } from '@/components/wizard/types';
 import { api } from '@/services/api';
 import { useWizardStore } from '@/stores/wizard';
@@ -53,6 +54,34 @@ async function createBackup() {
 function select(id: string) {
   wizard.setActiveSnapshot(id);
 }
+
+const pending = ref<{ id: string; title: string } | null>(null);
+
+const confirmText = computed(() => {
+  if (!pending.value) return '';
+  const drafts = wizard.draftCountForSnapshot(pending.value.id);
+  const tail =
+    drafts === 0
+      ? 'It has no drafts.'
+      : `This also deletes ${drafts} draft(s), with all their merge, review, and export data.`;
+  return `${tail} This cannot be undone.`;
+});
+
+function askDelete(id: string) {
+  const snapshot = wizard.snapshots.find((s) => s.id === id);
+  pending.value = { id, title: snapshot?.label || `Backup ${id.slice(0, 8)}` };
+}
+
+async function confirmDelete() {
+  if (!pending.value) return;
+  const id = pending.value.id;
+  pending.value = null;
+  try {
+    await wizard.removeSnapshot(id);
+  } catch (e) {
+    error.value = (e as Error).message;
+  }
+}
 </script>
 
 <template>
@@ -61,8 +90,19 @@ function select(id: string) {
     <ActiveSelector
       :items="items"
       :active-id="wizard.activeSnapshotId"
+      deletable
       empty-text="No backups yet — create one to freeze your contacts."
       @select="select"
+      @delete="askDelete"
+    />
+
+    <ConfirmDialog
+      :open="pending !== null"
+      :title="`Delete ${pending?.title ?? ''}?`"
+      :description="confirmText"
+      confirm-text="Delete backup"
+      @update:open="(v) => { if (!v) pending = null; }"
+      @confirm="confirmDelete"
     />
 
     <!-- Live import progress (FR-029): "230 / 2475 (9%)" + bar -->
