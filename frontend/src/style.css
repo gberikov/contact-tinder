@@ -107,3 +107,17 @@
     font-family: var(--font-sans);
   }
 }
+
+/*
+ * reka-ui AlertDialog quirk: while a modal is open the library sets
+ * `pointer-events: none` on <body>, and in some layer states it leaves the
+ * dialog content's inline pointer-events at `none` too — making the Cancel/
+ * Action buttons unclickable (clicks fall through to the overlay behind).
+ * The content is the top-most node by DOM order, so re-enabling pointer events
+ * on it (and the overlay) restores interaction. Inline styles win over classes,
+ * hence !important. Scoped to the alert-dialog parts only.
+ */
+[role="alertdialog"],
+[role="alertdialog"] * {
+  pointer-events: auto !important;
+}
