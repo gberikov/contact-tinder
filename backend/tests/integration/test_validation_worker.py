@@ -10,7 +10,8 @@ from tests.helpers import seed_account, seed_working_copy
 def test_worker_claims_and_completes(db, monkeypatch):
     # Avoid any real network from the worker's default website check.
     monkeypatch.setattr(
-        validation_worker, "_website_check", lambda url, **_: WebsiteResult(status="ok"),
+        validation_worker, "_website_check",
+        lambda url, **_: WebsiteResult(status="reachable", final_url=url),
         raising=False,
     )
     account = seed_account(db)

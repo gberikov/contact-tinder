@@ -289,10 +289,12 @@ hard block.
   *reachable* when the server returns **any** HTTP response (2xx/3xx/4xx/5xx); only transport-level
   failures — DNS resolution failure, connection refused/unreachable, TLS handshake failure, or
   timeout — count as *not reachable*.
-- **FR-015**: When a stored website uses `http://` and its `https://` equivalent is reachable (its
-  TLS handshake completes and it returns any HTTP response), Tidy MUST upgrade the value to `https://`
-  as a reversible staged edit; it MUST NOT downgrade https→http and MUST NOT upgrade to an https URL
-  that is not reachable.
+- **FR-015**: Tidy MUST normalize a reachable website value to its canonical form as a reversible
+  staged edit: (a) if the value has **no scheme** (e.g. `www.dk-studio.kz`), add one; (b) prefer
+  `https://` whenever the https version is reachable (its TLS handshake completes and it returns any
+  HTTP response). It MUST NOT downgrade https→http, MUST NOT use an https URL that is not reachable,
+  and MUST stage no edit when the canonical value already equals the stored value. A scheme-less value
+  whose host is reachable is therefore auto-corrected (scheme added), not queued as invalid.
 - **FR-016**: A website that is *not reachable* (a transport-level failure per FR-014) MUST be added
   to the manual queue as *not reachable* and left unchanged; Tidy MUST NOT auto-remove website values.
 - **FR-029**: Website checks MUST guard against SSRF: Tidy MUST NOT issue a request to a non-public

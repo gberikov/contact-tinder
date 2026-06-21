@@ -25,9 +25,11 @@ _UNSAFE = "unsafe"
 
 @dataclass(frozen=True)
 class WebsiteResult:
-    # "ok" (reachable, no change) | "upgrade_https" | "unreachable" | "unsafe"
+    # "reachable" | "unreachable" | "unsafe"
     status: str
-    final_url: str | None = None  # the https URL to write, only for "upgrade_https"
+    # When reachable: the canonical URL to store — scheme added if it was missing, https preferred
+    # when it works. The caller stages an edit only when this differs from the stored value.
+    final_url: str | None = None
 
 
 def _resolve_ips(host: str) -> list[str]:
@@ -111,31 +113,30 @@ def check(
         settings.website_check_max_redirects if max_redirects is None else max_redirects
     )
 
+    # _normalize adds a default http:// scheme when the stored value has none (e.g. "www.site.kz").
     normalized = _normalize(url)
-    host = urlsplit(normalized).hostname
-    if not _is_safe_host(host):
+    parts = urlsplit(normalized)
+    if not _is_safe_host(parts.hostname):
         return WebsiteResult(status="unsafe")
 
-    scheme = urlsplit(normalized).scheme
-    if scheme == "http":
-        https_url = _swap_scheme(normalized, "https")
-        outcome = _probe(https_url, timeout=timeout, max_redirects=max_redirects)
-        if outcome == _UNSAFE:
-            return WebsiteResult(status="unsafe")
-        if outcome == _REACHABLE:
-            return WebsiteResult(status="upgrade_https", final_url=https_url)
-        # https unreachable → fall back to checking the stored http URL
-        outcome = _probe(normalized, timeout=timeout, max_redirects=max_redirects)
-        if outcome == _UNSAFE:
-            return WebsiteResult(status="unsafe")
-        if outcome == _REACHABLE:
-            return WebsiteResult(status="ok")
+    # Always prefer https: probe the https variant first; the canonical URL we return adds the
+    # scheme (if it was missing) and upgrades to https when https works — one mechanism covers both
+    # "no scheme" and "http→https".
+    https_url = _swap_scheme(normalized, "https")
+    outcome = _probe(https_url, timeout=timeout, max_redirects=max_redirects)
+    if outcome == _UNSAFE:
+        return WebsiteResult(status="unsafe")
+    if outcome == _REACHABLE:
+        return WebsiteResult(status="reachable", final_url=https_url)
+
+    # https failed. If the operator explicitly stored an https URL, never downgrade to http.
+    if parts.scheme == "https":
         return WebsiteResult(status="unreachable")
 
-    # already https (or other scheme) — just probe it
+    # Stored value was http or scheme-less → fall back to the http URL (still scheme-normalized).
     outcome = _probe(normalized, timeout=timeout, max_redirects=max_redirects)
     if outcome == _UNSAFE:
         return WebsiteResult(status="unsafe")
     if outcome == _REACHABLE:
-        return WebsiteResult(status="ok")
+        return WebsiteResult(status="reachable", final_url=normalized)
     return WebsiteResult(status="unreachable")

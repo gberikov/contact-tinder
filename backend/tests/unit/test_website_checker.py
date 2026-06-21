@@ -31,16 +31,34 @@ def _public_dns(monkeypatch):
 def test_http_with_working_https_is_upgraded():
     respx.get("https://example.com/").mock(return_value=httpx.Response(200))
     r = wc.check("http://example.com/")
-    assert r.status == "upgrade_https"
+    assert r.status == "reachable"
     assert r.final_url == "https://example.com/"
 
 
 @respx.mock
-def test_https_reachable_is_ok_no_change():
+def test_https_reachable_is_canonical_unchanged():
     respx.get("https://example.com/").mock(return_value=httpx.Response(200))
     r = wc.check("https://example.com/")
-    assert r.status == "ok"
-    assert r.final_url is None
+    assert r.status == "reachable"
+    assert r.final_url == "https://example.com/"  # equals input → caller stages no edit
+
+
+@respx.mock
+def test_scheme_less_with_working_https_gets_scheme_and_https():
+    respx.get("https://www.dk-studio.kz").mock(return_value=httpx.Response(200))
+    r = wc.check("www.dk-studio.kz")
+    assert r.status == "reachable"
+    assert r.final_url == "https://www.dk-studio.kz"
+
+
+@respx.mock
+def test_scheme_less_http_only_gets_http_scheme():
+    # https fails, http works → add the http:// scheme (no false https upgrade, no downgrade issue).
+    respx.get("https://www.dk-studio.kz").mock(side_effect=httpx.ConnectError("no tls"))
+    respx.get("http://www.dk-studio.kz").mock(return_value=httpx.Response(200))
+    r = wc.check("www.dk-studio.kz")
+    assert r.status == "reachable"
+    assert r.final_url == "http://www.dk-studio.kz"
 
 
 @respx.mock
@@ -48,7 +66,8 @@ def test_blocking_403_still_counts_as_reachable():
     # https answers 403 (antibot) → reachable; the http→https upgrade still applies.
     respx.get("https://example.com/").mock(return_value=httpx.Response(403))
     r = wc.check("http://example.com/")
-    assert r.status == "upgrade_https"
+    assert r.status == "reachable"
+    assert r.final_url == "https://example.com/"
 
 
 @respx.mock

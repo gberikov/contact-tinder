@@ -29,7 +29,7 @@ def _seed_run(db):
     wc = seed_working_copy(db, account, people)
     run = validation_service.start_run(db, wc.id, default_region="KZ")
     validation_service.run_validation_job(
-        db, run.id, website_check=lambda url, **_: WebsiteResult(status="ok")
+        db, run.id, website_check=lambda url, **_: WebsiteResult(status="reachable", final_url=url)
     )
     return run
 

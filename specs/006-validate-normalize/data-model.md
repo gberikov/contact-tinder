@@ -93,9 +93,10 @@ All Tidy mutations are `StagedEdit` rows with `kind="normalize"` (auto-fixes) or
 | email | syntax ok; domain has no MX | queue `dead_email_domain` |
 | email | syntax ok; domain has MX | no action (valid) |
 | website | resolves to non-public IP (any hop) | queue `website_unsafe` — never fetched (FR-029) |
-| website | `http://`; `https://` reachable | **auto** StagedEdit → https (FR-015) |
+| website | reachable; canonical URL (scheme added and/or https) ≠ stored | **auto** StagedEdit → canonical (FR-015) |
+| website | scheme-less but host reachable | **auto** StagedEdit → add scheme (FR-015) |
 | website | transport failure (DNS/connect/TLS/timeout) | queue `website_unreachable` (FR-016) |
-| website | reachable (any HTTP response), already https | no action |
+| website | reachable; canonical already equals stored | no action |
 
 A single contact may yield several auto-fixes **and** several queue items across its fields (FR-007).
 

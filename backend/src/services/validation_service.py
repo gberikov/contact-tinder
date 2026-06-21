@@ -181,12 +181,6 @@ def _queue(
     )
 
 
-def _to_https(value: str) -> str:
-    if "://" in value:
-        return value.replace("http://", "https://", 1)
-    return "https://" + value.lstrip("/")
-
-
 # ---- the pass ---------------------------------------------------------------------------------
 
 def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=None) -> ValidationRun:
@@ -260,9 +254,11 @@ def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=Non
                 elif wr.status == "unreachable":
                     _queue(session, run, contact, "website", idx, "website_unreachable", value)
                     queued += 1
-                elif wr.status == "upgrade_https":
+                elif wr.status == "reachable" and wr.final_url and wr.final_url != value:
+                    # Canonical URL differs from the stored one — add the missing scheme and/or
+                    # upgrade to https (FR-015 + scheme-normalization).
                     np = deepcopy(contact.payload)
-                    np["urls"][idx]["value"] = _to_https(value)
+                    np["urls"][idx]["value"] = wr.final_url
                     _stage(session, contact, np, action="contact.normalized", kind="normalize")
                     auto += 1
 

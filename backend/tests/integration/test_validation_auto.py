@@ -25,8 +25,8 @@ def _person(i: int, *, phones=None, emails=None, urls=None) -> dict:
 
 def _fake_web(url, **_):
     if url.startswith("http://up."):
-        return WebsiteResult(status="upgrade_https", final_url="https://up.example/")
-    return WebsiteResult(status="ok")
+        return WebsiteResult(status="reachable", final_url="https://up.example/")
+    return WebsiteResult(status="reachable", final_url=url)  # canonical == input → no edit
 
 
 def _run(db, wc):
@@ -61,6 +61,23 @@ def test_e164_mobile_type_and_https_upgrade(db):
     audits = db.query(AuditEntry).filter_by(action="contact.normalized").all()
     assert len(audits) >= 3
     assert all(a.target_type == "working_copy_contact" for a in audits)
+
+
+def test_scheme_less_website_gets_canonical_url(db):
+    account = seed_account(db)
+    wc = seed_working_copy(db, account, [_person(0, urls=[{"value": "www.dk-studio.kz"}])])
+
+    def fake(url, **_):
+        # the real checker returns the scheme-normalized, https-preferred canonical URL
+        return WebsiteResult(status="reachable", final_url="https://www.dk-studio.kz")
+
+    run = validation_service.start_run(db, wc.id, default_region="KZ")
+    validation_service.run_validation_job(db, run.id, website_check=fake)
+    db.refresh(run)
+    contact = next(c for c in wc.contacts if c.payload["resourceName"] == "people/c0")
+    db.refresh(contact)
+    assert contact.payload["urls"][0]["value"] == "https://www.dk-studio.kz"
+    assert run.auto_applied_count == 1
 
 
 def test_rerun_is_idempotent(db):

@@ -34,7 +34,7 @@ def _fake_web(url, **_):
         return WebsiteResult(status="unsafe")
     if "dead." in url:
         return WebsiteResult(status="unreachable")
-    return WebsiteResult(status="ok")
+    return WebsiteResult(status="reachable", final_url=url)
 
 
 def _run(db, wc):
