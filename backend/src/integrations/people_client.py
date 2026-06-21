@@ -65,6 +65,7 @@ class GooglePeopleClient:
         return build("people", "v1", credentials=self._credentials, cache_discovery=False)
 
     def list_connections(self, page_token: str | None) -> ConnectionsPage:
+        from google.auth.exceptions import RefreshError
         from googleapiclient.errors import HttpError
 
         try:
@@ -82,6 +83,11 @@ class GooglePeopleClient:
                 )
             )
             response = request.execute()
+        except RefreshError as exc:  # pragma: no cover - integration env
+            # Access token expired and could not be refreshed (refresh token revoked, or — in
+            # Google "Testing" mode — expired after 7 days). Surface as auth-required so the import
+            # runner flags the account needs_reauth instead of looping forever (FR-017).
+            raise AuthError() from exc
         except HttpError as exc:  # pragma: no cover - exercised via integration env
             status = getattr(exc.resp, "status", None)
             if status == 429:

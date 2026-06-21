@@ -12,6 +12,7 @@ import time
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.core.config import get_settings
 from src.core.db import SessionLocal
 from src.core.logging import configure_logging
 from src.integrations.people_client import GooglePeopleClient
@@ -35,6 +36,7 @@ def claim_next_job(session: Session) -> ImportJob | None:
 
 
 def build_client(session: Session, snapshot: Snapshot) -> GooglePeopleClient:
+    settings = get_settings()
     account = session.get(Account, snapshot.account_id)
     from google.oauth2.credentials import Credentials
 
@@ -43,6 +45,11 @@ def build_client(session: Session, snapshot: Snapshot) -> GooglePeopleClient:
         token=crypto.decrypt(account.credential.enc_access_token),
         refresh_token=crypto.decrypt(account.credential.enc_refresh_token),
         token_uri="https://oauth2.googleapis.com/token",
+        # client_id/secret are REQUIRED to refresh the access token mid-import (a large address
+        # book outlives the ~1h token); without them google-auth raises RefreshError and the
+        # import stalls. Mirrors the delete/label workers (commit 84c8eeb).
+        client_id=settings.google_oauth_client_id,
+        client_secret=settings.google_oauth_client_secret,
         scopes=settings_scopes,
     )
     return GooglePeopleClient(creds)
