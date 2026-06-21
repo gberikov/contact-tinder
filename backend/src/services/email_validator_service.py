@@ -19,34 +19,50 @@ class EmailResult:
     has_mx: bool
     normalized: str | None
     issue: str | None  # None (ok) | "invalid_email" | "dead_email_domain"
+    detail: str | None = None  # specific human-readable reason
 
 
-def domain_has_mx(domain: str) -> bool:
-    """True if the domain publishes at least one MX record (or an implicit A/AAAA fallback)."""
+def domain_status(domain: str) -> str:
+    """Classify a domain's mail-receiving ability: 'ok' | 'no_domain' | 'no_mx'."""
     try:
         answers = dns.resolver.resolve(domain, "MX")
-        return len(answers) > 0
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
-        # No MX. RFC 5321 allows falling back to an A/AAAA record as an implicit MX.
+        if len(answers) > 0:
+            return "ok"
+        return "no_mx"
+    except dns.resolver.NXDOMAIN:
+        return "no_domain"  # the domain itself does not exist
+    except (dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        # No MX record. RFC 5321 allows an implicit A/AAAA fallback as the mail exchanger.
         try:
             dns.resolver.resolve(domain, "A")
-            return True
+            return "ok"
+        except dns.resolver.NXDOMAIN:
+            return "no_domain"
         except Exception:
-            return False
+            return "no_mx"
     except Exception:
-        # DNS timeout / lookup failure — treat as "cannot confirm", i.e. no MX.
-        return False
+        # DNS timeout / lookup failure — cannot confirm; treat as no MX.
+        return "no_mx"
 
 
 def analyze(raw: str) -> EmailResult:
     try:
         info = validate_email(raw, check_deliverability=False)
-    except EmailNotValidError:
-        return EmailResult(valid_syntax=False, has_mx=False, normalized=None, issue="invalid_email")
-
-    domain = info.domain
-    if not domain_has_mx(domain):
+    except EmailNotValidError as exc:
         return EmailResult(
-            valid_syntax=True, has_mx=False, normalized=info.normalized, issue="dead_email_domain"
+            valid_syntax=False, has_mx=False, normalized=None, issue="invalid_email",
+            detail=str(exc) or "Invalid email format",
+        )
+
+    status = domain_status(info.domain)
+    if status == "no_domain":
+        return EmailResult(
+            valid_syntax=True, has_mx=False, normalized=info.normalized, issue="dead_email_domain",
+            detail=f"Domain '{info.domain}' does not exist",
+        )
+    if status == "no_mx":
+        return EmailResult(
+            valid_syntax=True, has_mx=False, normalized=info.normalized, issue="dead_email_domain",
+            detail=f"Domain '{info.domain}' has no valid mail exchanger (MX) record",
         )
     return EmailResult(valid_syntax=True, has_mx=True, normalized=info.normalized, issue=None)

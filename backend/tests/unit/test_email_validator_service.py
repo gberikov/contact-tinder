@@ -9,7 +9,7 @@ from src.services import email_validator_service as ev
 @pytest.fixture(autouse=True)
 def _mx_present(monkeypatch):
     # Default: every domain has MX, so only syntax decides — individual tests override.
-    monkeypatch.setattr(ev, "domain_has_mx", lambda domain: True)
+    monkeypatch.setattr(ev, "domain_status", lambda domain: "ok")
 
 
 def test_valid_email_with_mx_is_ok():
@@ -32,8 +32,16 @@ def test_not_an_email_is_invalid_email():
 
 
 def test_valid_syntax_but_no_mx_is_dead_domain(monkeypatch):
-    monkeypatch.setattr(ev, "domain_has_mx", lambda domain: False)
+    monkeypatch.setattr(ev, "domain_status", lambda domain: "no_mx")
     r = ev.analyze("mail@gmial.com")
     assert r.issue == "dead_email_domain"
     assert r.valid_syntax is True
     assert r.has_mx is False
+    assert "MX" in (r.detail or "")
+
+
+def test_nonexistent_domain_says_does_not_exist(monkeypatch):
+    monkeypatch.setattr(ev, "domain_status", lambda domain: "no_domain")
+    r = ev.analyze("mail@no-such-domain-xyz.tld")
+    assert r.issue == "dead_email_domain"
+    assert "does not exist" in (r.detail or "")

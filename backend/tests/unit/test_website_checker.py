@@ -71,11 +71,19 @@ def test_blocking_403_still_counts_as_reachable():
 
 
 @respx.mock
-def test_timeout_is_unreachable():
+def test_timeout_is_unreachable_with_reason():
     respx.get("https://example.com/").mock(side_effect=httpx.ConnectTimeout("boom"))
     respx.get("http://example.com/").mock(side_effect=httpx.ConnectTimeout("boom"))
     r = wc.check("http://example.com/")
     assert r.status == "unreachable"
+    assert r.reason == "Connection timed out"
+
+
+def test_nonexistent_domain_says_does_not_resolve(monkeypatch):
+    monkeypatch.setattr(wc, "_resolve_ips", lambda host: [])  # DNS returns nothing
+    r = wc.check("http://no-such-host.invalid/")
+    assert r.status == "unreachable"
+    assert "resolve" in (r.reason or "").lower()
 
 
 @respx.mock

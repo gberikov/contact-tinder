@@ -83,6 +83,8 @@ class ValidationItem(Base):
     issue_type: Mapped[str] = mapped_column(String(24), nullable=False)
     original_value: Mapped[str] = mapped_column(Text, nullable=False)
     suggested_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Specific human-readable reason (e.g. "Domain does not exist", "TLS/SSL handshake failed").
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     # pending | resolved | skipped
     status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
     resolution: Mapped[dict | None] = mapped_column(JsonB, nullable=True)

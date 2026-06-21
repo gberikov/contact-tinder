@@ -1,4 +1,5 @@
 import {
+  type AutoFix,
   type ResolveValidationItemBody,
   type ValidationItem,
   type ValidationRun,
@@ -18,8 +19,10 @@ function loadRegion(): string | null {
 }
 
 interface State {
+  workingCopyId: string | null;
   run: ValidationRun | null;
   items: ValidationItem[];
+  autoFixes: AutoFix[];
   region: string | null;
   loading: boolean;
   error: string | null;
@@ -28,8 +31,10 @@ interface State {
 
 export const useTidyStore = defineStore('tidy', {
   state: (): State => ({
+    workingCopyId: null,
     run: null,
     items: [],
+    autoFixes: [],
     region: loadRegion(),
     loading: false,
     error: null,
@@ -85,9 +90,10 @@ export const useTidyStore = defineStore('tidy', {
 
     /** Restore the latest run + its items on entering/reloading the step. */
     async restore(workingCopyId: string) {
+      this.workingCopyId = workingCopyId;
       const runs = await api.listValidationRuns(workingCopyId);
       this.run = runs.length ? runs[0] : null;
-      await this.loadItems();
+      await Promise.all([this.loadItems(), this.loadAutoFixes()]);
       if (this.isRunning) await this.poll();
     },
 
@@ -95,13 +101,19 @@ export const useTidyStore = defineStore('tidy', {
       this.items = this.run ? await api.listValidationItems(this.run.id, 'all') : [];
     },
 
+    async loadAutoFixes() {
+      this.autoFixes = this.workingCopyId ? await api.listAutoFixes(this.workingCopyId) : [];
+    },
+
     async startRun(workingCopyId: string, sessionId?: string) {
+      this.workingCopyId = workingCopyId;
       this.loading = true;
       this.error = null;
       try {
         this.run = await api.startValidationRun(workingCopyId, this.region ?? undefined, sessionId);
         this.items = [];
         await this.poll();
+        await this.loadAutoFixes();
       } catch (e) {
         this.error = (e as Error).message;
       } finally {
@@ -139,7 +151,7 @@ export const useTidyStore = defineStore('tidy', {
     async undoEdit(editId: string) {
       await api.undoStagedEdit(editId);
       await this._refreshRun();
-      await this.loadItems();
+      await Promise.all([this.loadItems(), this.loadAutoFixes()]);
     },
 
     async _refreshRun() {

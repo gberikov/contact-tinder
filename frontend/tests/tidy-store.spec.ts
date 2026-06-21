@@ -11,6 +11,7 @@ vi.mock('@/services/api', () => ({
     listValidationItems: vi.fn(),
     resolveValidationItem: vi.fn(),
     skipValidationItem: vi.fn(),
+    listAutoFixes: vi.fn(),
     undoStagedEdit: vi.fn(),
     detectRegion: vi.fn(),
   },
@@ -48,6 +49,7 @@ describe('tidy store', () => {
     setActivePinia(createPinia());
     vi.mocked(api.getValidationRun).mockResolvedValue(run({ status: 'completed' }));
     vi.mocked(api.listValidationItems).mockResolvedValue([item()]);
+    vi.mocked(api.listAutoFixes).mockResolvedValue([]);
   });
   afterEach(() => vi.restoreAllMocks());
 

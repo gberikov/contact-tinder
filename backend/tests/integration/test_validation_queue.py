@@ -17,7 +17,7 @@ from tests.helpers import seed_account, seed_working_copy
 @pytest.fixture(autouse=True)
 def _mx(monkeypatch):
     # gmial.com has no MX; everything else does.
-    monkeypatch.setattr(ev, "domain_has_mx", lambda domain: domain != "gmial.com")
+    monkeypatch.setattr(ev, "domain_status", lambda domain: "no_mx" if domain == "gmial.com" else "ok")
 
 
 def _person(i, **fields):

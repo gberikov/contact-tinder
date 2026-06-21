@@ -33,7 +33,9 @@ const editValue = ref(props.item.suggestedValue ?? props.item.originalValue);
         <Badge variant="outline">{{ ISSUE_LABEL[item.issueType] ?? item.issueType }}</Badge>
         <span class="truncate text-sm font-medium">{{ item.contactDisplayName ?? 'Contact' }}</span>
       </div>
-      <div class="mt-1 truncate font-mono text-sm text-muted-foreground">{{ item.originalValue }}</div>
+      <!-- Specific reason so the operator doesn't have to re-check manually. -->
+      <div v-if="item.detail" class="mt-0.5 text-xs text-muted-foreground">{{ item.detail }}</div>
+      <div class="mt-1 truncate font-mono text-sm text-foreground">{{ item.originalValue }}</div>
     </div>
 
     <!-- Resolved/skipped: show outcome + undo for any staged edit. -->

@@ -298,6 +298,7 @@ export interface ValidationItem {
   fieldKind: 'phone' | 'email' | 'website';
   fieldIndex: number;
   issueType: ValidationIssue;
+  detail?: string | null;
   originalValue: string;
   suggestedValue?: string | null;
   status: 'pending' | 'resolved' | 'skipped';
@@ -310,6 +311,16 @@ export interface ResolveValidationItemBody {
   action: 'set_type' | 'edit_value' | 'remove_field';
   type?: string;
   value?: string;
+}
+
+export interface AutoFix {
+  stagedEditId: string;
+  workingCopyContactId: string;
+  contactDisplayName?: string | null;
+  fieldKind: 'phone' | 'email' | 'website';
+  before: string;
+  after: string;
+  createdAt: string;
 }
 
 export interface DetectRegionResult {
@@ -506,6 +517,8 @@ export const api = {
     }),
   skipValidationItem: (itemId: string) =>
     request<ValidationItem>(`/validation-items/${itemId}/skip`, { method: 'POST' }),
+  listAutoFixes: (workingCopyId: string) =>
+    request<AutoFix[]>(`/working-copies/${workingCopyId}/auto-fixes`),
   // Staged-edit undo reuses the existing feature-003 endpoint defined above (`undoStagedEdit`).
   detectRegion: () => request<DetectRegionResult>('/settings/detect-region'),
 };

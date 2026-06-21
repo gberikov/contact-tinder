@@ -166,6 +166,7 @@ def _queue(
     original_value: str,
     *,
     suggested: str | None = None,
+    detail: str | None = None,
 ) -> None:
     session.add(
         ValidationItem(
@@ -176,6 +177,7 @@ def _queue(
             issue_type=issue_type,
             original_value=original_value,
             suggested_value=suggested,
+            detail=detail,
             status="pending",
         )
     )
@@ -213,7 +215,8 @@ def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=Non
                 checked += 1
                 res = phone_normalizer.analyze(value, region)
                 if not res.valid:
-                    _queue(session, run, contact, "phone", idx, "invalid_phone", value)
+                    _queue(session, run, contact, "phone", idx, "invalid_phone", value,
+                           detail=f"Not a valid phone number for region {region}")
                     queued += 1
                     continue
                 if res.e164 and res.e164 != value:
@@ -229,7 +232,8 @@ def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=Non
                         auto += 1
                     else:
                         _queue(session, run, contact, "phone", idx, "unclear_type", value,
-                               suggested=res.e164)
+                               suggested=res.e164,
+                               detail="Valid number, but its type (mobile/work/home) is ambiguous")
                         queued += 1
 
             for idx, entry in enumerate(payload.get("emailAddresses", []) or []):
@@ -239,7 +243,7 @@ def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=Non
                 checked += 1
                 er = email_service.analyze(value)
                 if er.issue:
-                    _queue(session, run, contact, "email", idx, er.issue, value)
+                    _queue(session, run, contact, "email", idx, er.issue, value, detail=er.detail)
                     queued += 1
 
             for idx, entry in enumerate(payload.get("urls", []) or []):
@@ -249,10 +253,12 @@ def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=Non
                 checked += 1
                 wr = website_check(value)
                 if wr.status == "unsafe":
-                    _queue(session, run, contact, "website", idx, "website_unsafe", value)
+                    _queue(session, run, contact, "website", idx, "website_unsafe", value,
+                           detail=wr.reason)
                     queued += 1
                 elif wr.status == "unreachable":
-                    _queue(session, run, contact, "website", idx, "website_unreachable", value)
+                    _queue(session, run, contact, "website", idx, "website_unreachable", value,
+                           detail=wr.reason)
                     queued += 1
                 elif wr.status == "reachable" and wr.final_url and wr.final_url != value:
                     # Canonical URL differs from the stored one — add the missing scheme and/or
@@ -405,6 +411,55 @@ def run_out(session: Session, run: ValidationRun) -> dict:
     }
 
 
+_DIFF_FIELDS = (("phoneNumbers", "phone"), ("emailAddresses", "email"), ("urls", "website"))
+
+
+def _first_change(before: dict, after: dict) -> tuple[str, str, str] | None:
+    """Find the single field value that an auto-fix StagedEdit changed: (field_kind, before, after)."""
+    for key, kind in _DIFF_FIELDS:
+        b = before.get(key) or []
+        a = after.get(key) or []
+        for i in range(max(len(b), len(a))):
+            be = b[i] if i < len(b) else {}
+            ae = a[i] if i < len(a) else {}
+            if be.get("value") != ae.get("value"):
+                return kind, str(be.get("value") or ""), str(ae.get("value") or "")
+            if be.get("type") != ae.get("type"):
+                bv = be.get("value") or ""
+                return kind, f"{bv} (type: {be.get('type') or '—'})", f"{bv} (type: {ae.get('type')})"
+    return None
+
+
+def list_auto_fixes(session: Session, working_copy_id: uuid.UUID) -> list[dict]:
+    """Active `normalize` StagedEdits for a Draft, with a per-edit before→after diff and contact name."""
+    edits = session.scalars(
+        select(StagedEdit)
+        .where(
+            StagedEdit.working_copy_id == working_copy_id,
+            StagedEdit.kind == "normalize",
+            StagedEdit.status == "active",
+        )
+        .order_by(StagedEdit.created_at)
+    )
+    out: list[dict] = []
+    for edit in edits:
+        change = _first_change(edit.payload_before, edit.payload_after)
+        if change is None:
+            continue
+        kind, before, after = change
+        contact = session.get(WorkingCopyContact, edit.working_copy_contact_id)
+        out.append({
+            "stagedEditId": edit.id,
+            "workingCopyContactId": edit.working_copy_contact_id,
+            "contactDisplayName": contact_fields.display_name(contact.payload) if contact else None,
+            "fieldKind": kind,
+            "before": before,
+            "after": after,
+            "createdAt": edit.created_at,
+        })
+    return out
+
+
 def item_out(session: Session, item: ValidationItem) -> dict:
     contact = session.get(WorkingCopyContact, item.working_copy_contact_id)
     display = contact_fields.display_name(contact.payload) if contact else None
@@ -415,6 +470,7 @@ def item_out(session: Session, item: ValidationItem) -> dict:
         "fieldKind": item.field_kind,
         "fieldIndex": item.field_index,
         "issueType": item.issue_type,
+        "detail": item.detail,
         "originalValue": item.original_value,
         "suggestedValue": item.suggested_value,
         "status": item.status,

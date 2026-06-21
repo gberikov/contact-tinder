@@ -64,7 +64,8 @@ One finding needing a human decision (spec: *queue item*).
 | `working_copy_contact_id` | UUID FK → `working_copy_contact.id` `ON DELETE CASCADE` | the contact |
 | `field_kind` | `String(8)` | `phone \| email \| website` |
 | `field_index` | Integer | position within that field's array in the payload (locates the value) |
-| `issue_type` | `String(24)` | one of `ISSUE_TYPES` |
+| `issue_type` | `String(24)` | coarse category (drives the action set) — one of `ISSUE_TYPES` |
+| `detail` | `Text`, nullable | specific human reason ("Domain does not exist" vs "no MX"; "TLS handshake failed" vs "Connection timed out") so the operator needn't re-check |
 | `original_value` | `Text` | the value as stored (display + locate) |
 | `suggested_value` | `Text`, nullable | optional suggestion (e.g. a normalized phone for an unclear-type item) |
 | `status` | `String(16)` | `pending \| resolved \| skipped` (default `pending`) |

@@ -30,6 +30,8 @@ class WebsiteResult:
     # When reachable: the canonical URL to store — scheme added if it was missing, https preferred
     # when it works. The caller stages an edit only when this differs from the stored value.
     final_url: str | None = None
+    # When unreachable/unsafe: a specific human-readable reason (DNS / connection / TLS / timeout).
+    reason: str | None = None
 
 
 def _resolve_ips(host: str) -> list[str]:
@@ -63,11 +65,14 @@ def _is_public_ip(ip_str: str) -> bool:
     )
 
 
-def _is_safe_host(host: str | None) -> bool:
+def _classify_host(host: str | None) -> str:
+    """'safe' (public) | 'unsafe' (resolves to a non-public address) | 'nodns' (does not resolve)."""
     if not host:
-        return False
+        return "nodns"
     ips = _resolve_ips(host)
-    return bool(ips) and all(_is_public_ip(ip) for ip in ips)
+    if not ips:
+        return "nodns"
+    return "safe" if all(_is_public_ip(ip) for ip in ips) else "unsafe"
 
 
 def _normalize(url: str) -> str:
@@ -82,26 +87,34 @@ def _swap_scheme(url: str, scheme: str) -> str:
     return urlunsplit(parts._replace(scheme=scheme))
 
 
-def _probe(url: str, *, timeout: float, max_redirects: int) -> str:
-    """Follow redirects manually, SSRF-guarding each hop. Returns one of the probe outcomes."""
+def _probe(url: str, *, timeout: float, max_redirects: int) -> tuple[str, str | None]:
+    """Follow redirects manually, SSRF-guarding each hop. Returns (outcome, reason)."""
     current = url
     with httpx.Client(follow_redirects=False, timeout=timeout) as client:
         for _ in range(max_redirects + 1):
             host = urlsplit(current).hostname
-            if not _is_safe_host(host):
-                return _UNSAFE
+            cls = _classify_host(host)
+            if cls == "nodns":
+                return _UNREACHABLE, "Domain does not resolve (it may not exist)"
+            if cls == "unsafe":
+                return _UNSAFE, "Resolves to a private/internal address"
             try:
                 resp = client.get(current)
-            except httpx.HTTPError:
-                return _UNREACHABLE
+            except httpx.TimeoutException:
+                return _UNREACHABLE, "Connection timed out"
+            except httpx.HTTPError as exc:
+                msg = str(exc).lower()
+                if "ssl" in msg or "certificate" in msg or "tls" in msg:
+                    return _UNREACHABLE, "TLS/SSL handshake failed"
+                return _UNREACHABLE, "Connection failed"
             if resp.is_redirect:
                 location = resp.headers.get("location")
                 if not location:
-                    return _REACHABLE  # a redirect with no target still means the server answered
+                    return _REACHABLE, None  # redirect with no target = the server still answered
                 current = urljoin(current, location)
                 continue
-            return _REACHABLE  # any non-redirect HTTP response = reachable
-    return _REACHABLE  # too many redirects, but the server is clearly answering
+            return _REACHABLE, None  # any non-redirect HTTP response = reachable
+    return _REACHABLE, None  # too many redirects, but the server is clearly answering
 
 
 def check(
@@ -116,27 +129,30 @@ def check(
     # _normalize adds a default http:// scheme when the stored value has none (e.g. "www.site.kz").
     normalized = _normalize(url)
     parts = urlsplit(normalized)
-    if not _is_safe_host(parts.hostname):
-        return WebsiteResult(status="unsafe")
+    cls = _classify_host(parts.hostname)
+    if cls == "unsafe":
+        return WebsiteResult(status="unsafe", reason="Resolves to a private/internal address")
+    if cls == "nodns":
+        return WebsiteResult(status="unreachable", reason="Domain does not resolve (it may not exist)")
 
     # Always prefer https: probe the https variant first; the canonical URL we return adds the
     # scheme (if it was missing) and upgrades to https when https works — one mechanism covers both
     # "no scheme" and "http→https".
     https_url = _swap_scheme(normalized, "https")
-    outcome = _probe(https_url, timeout=timeout, max_redirects=max_redirects)
+    outcome, reason = _probe(https_url, timeout=timeout, max_redirects=max_redirects)
     if outcome == _UNSAFE:
-        return WebsiteResult(status="unsafe")
+        return WebsiteResult(status="unsafe", reason=reason)
     if outcome == _REACHABLE:
         return WebsiteResult(status="reachable", final_url=https_url)
 
     # https failed. If the operator explicitly stored an https URL, never downgrade to http.
     if parts.scheme == "https":
-        return WebsiteResult(status="unreachable")
+        return WebsiteResult(status="unreachable", reason=reason)
 
     # Stored value was http or scheme-less → fall back to the http URL (still scheme-normalized).
-    outcome = _probe(normalized, timeout=timeout, max_redirects=max_redirects)
+    outcome, reason = _probe(normalized, timeout=timeout, max_redirects=max_redirects)
     if outcome == _UNSAFE:
-        return WebsiteResult(status="unsafe")
+        return WebsiteResult(status="unsafe", reason=reason)
     if outcome == _REACHABLE:
         return WebsiteResult(status="reachable", final_url=normalized)
-    return WebsiteResult(status="unreachable")
+    return WebsiteResult(status="unreachable", reason=reason)

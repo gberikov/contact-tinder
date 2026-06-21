@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import TidyQueue from '@/components/tidy/TidyQueue.vue';
+import TidyAutoFixes from '@/components/tidy/TidyAutoFixes.vue';
+import TidyDeck from '@/components/tidy/TidyDeck.vue';
 import TidyRunPanel from '@/components/tidy/TidyRunPanel.vue';
+import { Button } from '@/components/ui/button';
 import { useTidyStore } from '@/stores/tidy';
 import { useWizardStore } from '@/stores/wizard';
 import { storeToRefs } from 'pinia';
-import { computed, onMounted, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 const wizard = useWizardStore();
 const tidy = useTidyStore();
-const { run } = storeToRefs(tidy);
+const { run, autoFixes } = storeToRefs(tidy);
 
 const workingCopyId = computed(() => wizard.activeWorkingCopyId);
 const sessionId = computed(() => wizard.latestTriageSession?.id);
@@ -16,22 +18,24 @@ const sessionId = computed(() => wizard.latestTriageSession?.id);
 const pendingCount = computed(() => tidy.pendingItems.length);
 const isCompleted = computed(() => run.value?.status === 'completed');
 const nothingToClean = computed(
-  () => isCompleted.value && (run.value?.autoAppliedCount ?? 0) === 0 && pendingCount.value === 0,
+  () =>
+    isCompleted.value &&
+    (run.value?.autoAppliedCount ?? 0) === 0 &&
+    pendingCount.value === 0 &&
+    autoFixes.value.length === 0,
 );
 
-// Restore the latest run + queue on entry/reload (FR-003); refresh the wizard derivation too.
+const tab = ref<'queue' | 'fixes'>('queue');
+
 async function restore() {
   if (!workingCopyId.value) return;
   await tidy.ensureRegion();
-  // Refresh review sessions so `sessionId` is current (a stale id would otherwise scope the run);
-  // the backend also tolerates an unknown session id, but keeping it fresh is correct.
   await wizard.loadReview();
   await tidy.restore(workingCopyId.value);
   await wizard.loadTidy();
 }
 onMounted(restore);
 watch(workingCopyId, restore);
-// Keep the stepper's running/completed state in sync as the run finishes.
 watch(
   () => run.value?.status,
   () => wizard.loadTidy(),
@@ -42,8 +46,6 @@ watch(
   <section v-if="workingCopyId" class="space-y-5">
     <TidyRunPanel :working-copy-id="workingCopyId" :session-id="sessionId" />
 
-    <!-- Passable-with-warning: continuing to Export with open items is allowed (the shared Continue
-         button), but we surface the count clearly, mirroring the undecided-survivors warning. -->
     <p
       v-if="isCompleted && pendingCount > 0"
       class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
@@ -56,7 +58,20 @@ watch(
       Nothing to clean — every kept contact's phones, emails, and websites already look good.
     </p>
 
-    <TidyQueue />
+    <!-- Two views: the review deck (one card at a time) and the list of auto-applied fixes. -->
+    <template v-if="run && !nothingToClean">
+      <div class="flex gap-2">
+        <Button :variant="tab === 'queue' ? 'default' : 'outline'" size="sm" @click="tab = 'queue'">
+          To review ({{ pendingCount }})
+        </Button>
+        <Button :variant="tab === 'fixes' ? 'default' : 'outline'" size="sm" @click="tab = 'fixes'">
+          Auto-fixed ({{ autoFixes.length }})
+        </Button>
+      </div>
+
+      <TidyDeck v-if="tab === 'queue'" />
+      <TidyAutoFixes v-else />
+    </template>
   </section>
 
   <p v-else class="text-sm text-muted-foreground">

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from src.api.schemas import (
+    AutoFixOut,
     DetectRegionOut,
     ResolveValidationItemBody,
     StartValidationBody,
@@ -59,6 +60,13 @@ def get_validation_run(
 ) -> ValidationRunOut:
     run = validation_service.get_run(session, run_id)
     return ValidationRunOut(**validation_service.run_out(session, run))
+
+
+@router.get("/working-copies/{working_copy_id}/auto-fixes", response_model=list[AutoFixOut])
+def list_auto_fixes(
+    working_copy_id: uuid.UUID, session: Session = Depends(get_session)
+) -> list[AutoFixOut]:
+    return [AutoFixOut(**f) for f in validation_service.list_auto_fixes(session, working_copy_id)]
 
 
 @router.get("/validation-runs/{run_id}/items", response_model=list[ValidationItemOut])

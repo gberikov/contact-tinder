@@ -80,6 +80,17 @@ def test_scheme_less_website_gets_canonical_url(db):
     assert run.auto_applied_count == 1
 
 
+def test_list_auto_fixes_returns_before_after(db):
+    account = seed_account(db)
+    wc = seed_working_copy(db, account, [_person(0, phones=[{"value": "+7 (701) 722-15-02"}])])
+    _run(db, wc)
+    fixes = validation_service.list_auto_fixes(db, wc.id)
+    assert len(fixes) >= 1
+    e164 = next(f for f in fixes if f["fieldKind"] == "phone" and "+77017221502" in f["after"])
+    assert "+7 (701) 722-15-02" in e164["before"]
+    assert e164["stagedEditId"] is not None
+
+
 def test_rerun_is_idempotent(db):
     account = seed_account(db)
     wc = seed_working_copy(db, account, [_person(0, phones=[{"value": "+7 (701) 722-15-02"}])])

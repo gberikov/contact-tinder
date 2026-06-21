@@ -345,12 +345,23 @@ class ValidationItemOut(BaseModel):
     fieldKind: str
     fieldIndex: int
     issueType: str
+    detail: str | None = None
     originalValue: str
     suggestedValue: str | None = None
     status: str
     stagedEditId: uuid.UUID | None = None
     createdAt: datetime
     resolvedAt: datetime | None = None
+
+
+class AutoFixOut(BaseModel):
+    stagedEditId: uuid.UUID
+    workingCopyContactId: uuid.UUID
+    contactDisplayName: str | None = None
+    fieldKind: str
+    before: str
+    after: str
+    createdAt: datetime
 
 
 class ResolveValidationItemBody(BaseModel):
