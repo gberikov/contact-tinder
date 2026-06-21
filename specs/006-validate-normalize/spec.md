@@ -78,6 +78,23 @@ The new wizard becomes a **seven-step** flow:
 - Q: Which contacts get validated and normalized? → A: **Only the contacts that survived Review**
   (kept, i.e. not marked for deletion) — the set that will actually be exported. No effort is spent
   validating contacts that are about to be deleted.
+- Q: How is the default region for parsing national-format phone numbers (those without a `+`
+  country code) determined? → A: It is a **configurable setting**, whose initial default is
+  **auto-detected from the operator's IP geolocation**. The currently-active region MUST be
+  **visibly surfaced (highlighted)** in the Tidy UI so the operator notices which country numbers are
+  being interpreted as, and can change it. Numbers already in `+` international form are parsed by
+  their own country code regardless of this setting.
+- Q: What counts as a website being "reachable" (and therefore when is an http→https upgrade
+  applied)? → A: **Any HTTP response from the server counts as reachable** — 2xx, 3xx, 4xx, and 5xx
+  alike (so antibot 403/429 and soft-404s are *not* treated as dead). Only **transport-level
+  failures** — DNS resolution failure, connection refused/unreachable, TLS handshake failure, or
+  timeout — count as *not reachable* and queue the website. An http→https upgrade is applied when an
+  `https://` request completes its TLS handshake and returns any HTTP response.
+- Q: How are website checks protected against SSRF (a contact URL pointing at an internal/private
+  address)? → A: Tidy MUST **refuse to make requests to non-public targets** — loopback, RFC1918
+  private ranges, link-local (incl. the cloud-metadata address `169.254.169.254`), and unique-local
+  IPv6 — including after redirects. Such a website is **not fetched**; it is queued as *can't safely
+  check* and left unchanged, never auto-modified.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -192,9 +209,15 @@ hard block.
 - **http with no working https**: If `https://` is not reachable but `http://` is, the value is left
   as-is (no downgrade, no false upgrade) and, if even http is unreachable, it is queued as a dead
   website.
-- **Slow / bot-blocked websites**: Outbound checks are time-limited and bounded in concurrency; a
-  site that times out or returns a blocking response is treated as *not reachable* and queued rather
-  than crashing or hanging the run — the operator can still keep it manually.
+- **Slow / bot-blocked websites**: Outbound checks are time-limited and bounded in concurrency. A
+  site that returns a blocking response (e.g. 403/429) still counts as *reachable* (the server
+  answered) and is left as-is; only a site that times out or fails at the transport level (DNS/
+  connection/TLS) is queued as *not reachable*. Either way the run never crashes or hangs, and the
+  operator can still keep a queued site manually.
+- **Website pointing at an internal address**: A contact URL that resolves to a non-public address
+  (loopback, private, link-local/metadata, IPv6 unique-local) — including via a redirect — is never
+  fetched; it is queued as *can't safely check* and left unchanged, so the validator can't be used to
+  probe internal infrastructure (SSRF).
 - **Changing an upstream selection**: Switching the active Draft (or re-running Merge/Review)
   re-derives Tidy's state for that branch and does not destroy a previous branch's Tidy run or queue.
 - **Re-running Tidy**: Starting a fresh Tidy run re-checks the current kept set; already-applied
@@ -240,6 +263,11 @@ hard block.
   automatically **only** when the number is confidently classified as a mobile line; otherwise it
   MUST add an *unclear type* item to the manual queue offering an explicit type choice, and MUST NOT
   guess the type.
+- **FR-028**: The default region used to parse national-format phone numbers (those without a `+`
+  country code) MUST be a configurable setting. Its initial value MUST be auto-detected from the
+  operator's IP geolocation, and the currently-active region MUST be visibly surfaced in the Tidy UI
+  (e.g. a highlighted country indicator the operator can change). Phone numbers already in `+`
+  international form MUST be parsed by their own country code regardless of this setting.
 
 **Email addresses**
 
@@ -254,18 +282,27 @@ hard block.
 **Websites**
 
 - **FR-014**: Tidy MUST check every website URL on a kept contact for reachability using a
-  time-limited HTTP request that follows redirects, with bounded concurrency across the run.
-- **FR-015**: When a stored website uses `http://` and its `https://` equivalent is confirmed
-  reachable, Tidy MUST upgrade the value to `https://` as a reversible staged edit; it MUST NOT
-  downgrade https→http and MUST NOT upgrade to an https URL that is not reachable.
-- **FR-016**: A website that does not respond within the time limit MUST be added to the manual queue
-  as *not reachable* and left unchanged; Tidy MUST NOT auto-remove website values.
+  time-limited HTTP request that follows redirects, with bounded concurrency across the run. A URL is
+  *reachable* when the server returns **any** HTTP response (2xx/3xx/4xx/5xx); only transport-level
+  failures — DNS resolution failure, connection refused/unreachable, TLS handshake failure, or
+  timeout — count as *not reachable*.
+- **FR-015**: When a stored website uses `http://` and its `https://` equivalent is reachable (its
+  TLS handshake completes and it returns any HTTP response), Tidy MUST upgrade the value to `https://`
+  as a reversible staged edit; it MUST NOT downgrade https→http and MUST NOT upgrade to an https URL
+  that is not reachable.
+- **FR-016**: A website that is *not reachable* (a transport-level failure per FR-014) MUST be added
+  to the manual queue as *not reachable* and left unchanged; Tidy MUST NOT auto-remove website values.
+- **FR-029**: Website checks MUST guard against SSRF: Tidy MUST NOT issue a request to a non-public
+  target — loopback, RFC1918 private ranges, link-local (including the cloud-metadata address
+  `169.254.169.254`), or IPv6 unique-local — and MUST re-apply this guard on every redirect hop. A
+  website resolving to such a target MUST NOT be fetched; it MUST be queued as *can't safely check*
+  and left unchanged.
 
 **Manual-doctoring queue**
 
 - **FR-017**: Tidy MUST maintain, per run, a queue of items requiring human attention; each item MUST
   identify the contact, the specific field/value, and the issue reason (invalid phone, unclear type,
-  invalid email, email domain can't receive mail, website not reachable).
+  invalid email, email domain can't receive mail, website not reachable, website can't safely check).
 - **FR-018**: Each queue item MUST offer explicit, clearly-labeled resolution actions appropriate to
   its issue (e.g. choose a phone type, edit the value, or remove the field), and resolving an item
   MUST apply any chosen change as a reversible staged edit and remove the item from the pending queue.
@@ -285,8 +322,9 @@ hard block.
 - **FR-024**: Tidy MUST NOT push any change directly to Google; its edits stay staged on the Draft and
   reach Google only through the existing Export step and its existing safeguards.
 - **FR-025**: Outbound validation requests (DNS and HTTP) MUST be limited to the domains/URLs already
-  present in the operator's own kept contacts, MUST be time-limited and concurrency-bounded, and MUST
-  NOT transmit contact data anywhere beyond the lookups required to validate those values.
+  present in the operator's own kept contacts, MUST be time-limited and concurrency-bounded, MUST NOT
+  target non-public addresses (FR-029), and MUST NOT transmit contact data anywhere beyond the lookups
+  required to validate those values.
 
 **Terminology & UX (consistent with feature 005)**
 
@@ -305,14 +343,17 @@ hard block.
   re-runnable.
 - **Queue item (validation item)**: One finding that needs a human decision. Identifies the contact,
   the field kind (phone / email / website), the specific value, the issue reason (invalid phone /
-  unclear type / invalid email / email domain can't receive mail / website not reachable), an
-  optional suggested value, and a status (pending / resolved / skipped).
+  unclear type / invalid email / email domain can't receive mail / website not reachable / website
+  can't safely check), an optional suggested value, and a status (pending / resolved / skipped).
 - **Staged edit (existing)**: The reversible before/after change record already used by the Draft for
   edits and transliterations (feature 003). Tidy's auto-fixes and queue resolutions are recorded as
   staged edits of a normalization kind, inheriting undo and audit for free; no new edit concept is
   introduced.
 - **Kept contact set**: The contacts in the active Draft not marked for deletion in Review — the sole
   input to a Tidy run.
+- **Default phone region setting**: The operator-configurable country used to parse national-format
+  phone numbers. Initialized from IP geolocation, persisted, editable in settings, and surfaced
+  (highlighted) in the Tidy UI. Affects only numbers lacking a `+` country code.
 
 ## Success Criteria *(mandatory)*
 
@@ -338,6 +379,9 @@ hard block.
   its time limit, and the run completes (or fails visibly) regardless of slow or blocking sites.
 - **SC-009**: An operator can identify, for any queue item, what is wrong and what their options are
   within 10 seconds, from the item's on-screen reason and labeled actions alone.
+- **SC-010**: Website checks issue zero outbound requests to non-public addresses (loopback, private,
+  link-local/metadata, IPv6 unique-local), including across redirects; 100% of such URLs are queued as
+  *can't safely check* instead.
 
 ## Assumptions
 
@@ -350,8 +394,10 @@ hard block.
   staged-edit/undo/audit mechanism (feature 003) and the existing background-job + running-state
   pattern (features 002/004/005) rather than inventing new ones.
 - **Phone normalization standard**: Valid numbers are normalized to **E.164**; the implementation uses
-  a libphonenumber-equivalent library. Default region for parsing locally-formatted numbers is the
-  operator's expected region (e.g. KZ/RU) and is a configurable implementation detail.
+  a libphonenumber-equivalent library. The default region for parsing national-format numbers is a
+  configurable setting (FR-028), initialized from the operator's IP geolocation and visibly surfaced
+  so the operator can correct it; `+`-prefixed numbers parse by their own country code regardless.
+  Resolving the geolocation lookup mechanism (service vs. bundled database) is a planning detail.
 - **Email depth**: Validation is **syntax + domain MX record** only; SMTP mailbox probing is
   excluded as unreliable (accept-all/catch-all domains) and operationally risky (sender-IP
   blacklisting). "Is this exact mailbox alive" is therefore not guaranteed — only "this domain can
@@ -363,7 +409,8 @@ hard block.
   judgment and is therefore always offered as a manual choice, never guessed.
 - **Single-operator, own data**: Outbound DNS/HTTP lookups target only domains and URLs already
   present in the operator's own contacts; no third party is contacted beyond what validating those
-  values requires.
+  values requires. Because contact URLs can originate from third parties (synced from Google),
+  website checks still apply an SSRF guard (FR-029) against non-public targets.
 - **Localized UI copy**: User-facing labels follow the existing app's language conventions; the issue
   reasons and actions above are described in English in this spec but rendered in the app's UI
   language during implementation.
