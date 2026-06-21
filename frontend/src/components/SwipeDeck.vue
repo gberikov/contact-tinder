@@ -4,12 +4,20 @@ import ContactCard from '@/components/ContactCard.vue';
 import SwipeControls from '@/components/SwipeControls.vue';
 import { Button } from '@/components/ui/button';
 import { useTriageStore } from '@/stores/triage';
-import { Undo2 } from 'lucide-vue-next';
+import { RotateCcw, Undo2 } from 'lucide-vue-next';
 import { storeToRefs } from 'pinia';
 import { onBeforeUnmount, onMounted } from 'vue';
 
 const store = useTriageStore();
 const { summary, error, canUndo } = storeToRefs(store);
+
+function startOver() {
+  if (
+    window.confirm('Start the review over? This clears all decisions and reverts staged edits.')
+  ) {
+    store.reset();
+  }
+}
 
 // Keyboard shortcuts: ←/D delete · →/K keep · ↑/P process · ↓/U undo last.
 function onKey(e: KeyboardEvent) {
@@ -37,30 +45,46 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <template>
-  <div class="mx-auto max-w-md">
-    <div class="mb-2 flex min-h-8 justify-end">
-      <Button variant="outline" size="sm" :disabled="!canUndo" @click="store.undoLast()">
-        <Undo2 /> Undo
+  <div class="w-full">
+    <!-- Action bar above the card: Start over pinned hard to the left edge, Undo to the right edge,
+         with the Delete/Process/Keep group centred far between them so the destructive resets can't
+         be hit by accident. Anchoring it here also keeps the controls still as contact detail varies
+         the card's height. -->
+    <div class="mb-7 flex items-start justify-between gap-3">
+      <Button
+        variant="outline"
+        :disabled="(summary?.decided ?? 0) === 0"
+        @click="startOver"
+      >
+        <RotateCcw /> Start over
       </Button>
-    </div>
-    <p v-if="error" class="text-center text-sm text-destructive">{{ error }}</p>
-    <template v-if="store.currentCard">
-      <ContactCard :contact="store.currentCard.contact" />
+
       <SwipeControls
+        :disabled="!store.currentCard"
         @keep="store.decide('keep')"
         @delete="store.decide('delete')"
         @process="store.decide('process', { wantsEdit: true, wantsTransliterate: true })"
       />
-      <p v-if="summary" class="mt-2 text-center text-sm text-muted-foreground">
-        {{ summary.remaining }} remaining
-      </p>
-      <p
-        class="mt-3 text-center text-xs text-muted-foreground [&_kbd]:rounded [&_kbd]:border [&_kbd]:bg-muted [&_kbd]:px-1.5 [&_kbd]:py-0.5"
+
+      <Button
+        variant="outline"
+        title="Undo last decision (↓ or U)"
+        :disabled="!canUndo"
+        @click="store.undoLast()"
       >
-        <kbd>←</kbd>/<kbd>D</kbd> delete · <kbd>→</kbd>/<kbd>K</kbd> keep ·
-        <kbd>↑</kbd>/<kbd>P</kbd> process · <kbd>↓</kbd>/<kbd>U</kbd> undo
-      </p>
-    </template>
-    <CompletionSummary v-else-if="summary" :summary="summary" />
+        <Undo2 /> Undo
+      </Button>
+    </div>
+
+    <div class="mx-auto max-w-md">
+      <p v-if="error" class="mb-2 text-center text-sm text-destructive">{{ error }}</p>
+      <template v-if="store.currentCard">
+        <ContactCard :contact="store.currentCard.contact" />
+        <p v-if="summary" class="mt-3 text-center text-sm text-muted-foreground">
+          {{ summary.remaining }} remaining
+        </p>
+      </template>
+      <CompletionSummary v-else-if="summary" :summary="summary" />
+    </div>
   </div>
 </template>
