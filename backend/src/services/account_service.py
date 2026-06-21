@@ -55,6 +55,17 @@ def get_account(session: Session, account_id: uuid.UUID) -> Account:
 
 def disconnect(session: Session, account_id: uuid.UUID) -> None:
     account = get_account(session, account_id)
+    # Cascade: delete the account's snapshots (and their drafts/derived data) first so the
+    # snapshot RESTRICT child constraint is satisfied (Connect cleanup).
+    from src.models.snapshot import Snapshot
+    from src.services import snapshot_service
+
+    for sid in session.scalars(
+        select(Snapshot.id).where(Snapshot.account_id == account_id)
+    ).all():
+        snapshot_service.delete_snapshot(session, sid, confirm=True)
+
+    account = get_account(session, account_id)  # re-fetch after child commits
     session.delete(account)
     session.flush()
 
