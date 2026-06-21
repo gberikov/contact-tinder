@@ -59,3 +59,32 @@ describe('wizard cascade counts', () => {
     expect(store.workingCopyBySnapshot.s1).toBeUndefined();
   });
 });
+
+describe('wizard review gate', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+  });
+
+  it('Review is always passable even with no triage session', () => {
+    const store = useWizardStore();
+    store.triageSessions = [];
+    expect(store.passable('review')).toBe(true);
+  });
+
+  it('export becomes available once merge is complete, regardless of triage', () => {
+    const store = useWizardStore();
+    store.dedupRuns = [
+      {
+        id: 'r1',
+        workingCopyId: 'w1',
+        status: 'completed',
+        modelVersion: 'v',
+        confidenceFloor: 0,
+        createdAt: '',
+      },
+    ];
+    store.triageSessions = [];
+    expect(store.available('export')).toBe(true);
+  });
+});

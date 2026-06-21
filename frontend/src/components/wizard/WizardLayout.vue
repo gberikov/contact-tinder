@@ -13,9 +13,7 @@ const router = useRouter();
 
 const currentKey = computed<StepKey>(() => wizard.currentStepKey);
 const currentStep = computed(() => stepByKey(currentKey.value));
-const canContinue = computed(
-  () => wizard.completed(currentKey.value) || wizard.emptyButPassable(currentKey.value),
-);
+const canContinue = computed(() => wizard.passable(currentKey.value));
 const nextStep = computed(() => WIZARD_STEPS[currentStep.value.index] ?? null);
 const prevStep = computed(() => WIZARD_STEPS[currentStep.value.index - 2] ?? null);
 

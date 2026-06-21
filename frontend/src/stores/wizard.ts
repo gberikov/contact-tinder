@@ -183,7 +183,7 @@ export const useWizardStore = defineStore('wizard', {
     available() {
       return (key: StepKey): boolean => {
         const prereq = stepByKey(key).prerequisiteKey;
-        return prereq == null ? true : this.completed(prereq);
+        return prereq == null ? true : this.passable(prereq);
       };
     },
     emptyButPassable() {
@@ -200,6 +200,14 @@ export const useWizardStore = defineStore('wizard', {
             : false;
         }
         return false;
+      };
+    },
+    // FR-A11/A12: Review can always be continued past (Export's undecided warning is the net);
+    // every other step is passable exactly when it is completed (or empty-but-passable).
+    passable() {
+      return (key: StepKey): boolean => {
+        if (key === 'review') return true;
+        return this.completed(key) || this.emptyButPassable(key);
       };
     },
     displayState(state) {
