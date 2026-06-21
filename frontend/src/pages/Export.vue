@@ -4,12 +4,15 @@ import ExportReport from '@/components/ExportReport.vue';
 import LabelPreview from '@/components/LabelPreview.vue';
 import UndecidedWarning from '@/components/UndecidedWarning.vue';
 import { useExportStore } from '@/stores/export';
+import { useWizardStore } from '@/stores/wizard';
 import { storeToRefs } from 'pinia';
 import { onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 
 const route = useRoute();
-const workingCopyId = route.params.id as string;
+const wizard = useWizardStore();
+// Driven by the route param on the legacy page, or by the active Draft inside the wizard.
+const workingCopyId = (route.params.id as string) ?? wizard.activeWorkingCopyId ?? '';
 const store = useExportStore();
 const { preview, run, error, loading } = storeToRefs(store);
 
@@ -37,13 +40,12 @@ async function reauthorize() {
 
 <template>
   <section class="export-page">
-    <h1>Export to Google</h1>
     <p v-if="loading">Loading preview…</p>
 
     <template v-else-if="preview">
       <p v-if="store.nothingToExport" class="empty">
         Nothing to export — no contacts are decided <em>delete</em> and none are in the Processing
-        Queue. Triage some contacts first.
+        Queue. Review some contacts first.
       </p>
 
       <template v-else>
@@ -74,10 +76,10 @@ async function reauthorize() {
 
           <div v-if="store.needsWriteScope" class="reauth">
             <p class="error">
-              Google ещё не разрешил запись в контакты для этого аккаунта.
+              Google hasn't granted write access to contacts for this account yet.
             </p>
             <button type="button" class="reauth-btn" @click="reauthorize">
-              Разрешить доступ Google и продолжить
+              Allow Google access and continue
             </button>
           </div>
           <p v-else-if="error" class="error">{{ error }}</p>

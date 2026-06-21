@@ -2,11 +2,14 @@
 import ClusterList from '@/components/ClusterList.vue';
 import DedupRunPanel from '@/components/DedupRunPanel.vue';
 import { useDedupStore } from '@/stores/dedup';
+import { useWizardStore } from '@/stores/wizard';
 import { storeToRefs } from 'pinia';
-import { RouterLink, useRoute } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 const route = useRoute();
-const workingCopyId = route.params.id as string;
+const wizard = useWizardStore();
+// Driven by the route param on the legacy page, or by the active Draft inside the wizard.
+const workingCopyId = (route.params.id as string) ?? wizard.activeWorkingCopyId ?? '';
 const store = useDedupStore();
 const { pendingClusters } = storeToRefs(store);
 
@@ -19,19 +22,8 @@ async function onDismiss(clusterId: string) {
 </script>
 
 <template>
-  <section>
-    <h2>Deduplicate working copy</h2>
+  <section class="space-y-4">
     <DedupRunPanel :working-copy-id="workingCopyId" />
     <ClusterList :clusters="pendingClusters" @merge="onMerge" @dismiss="onDismiss" />
-    <p class="next">
-      Done deduplicating?
-      <RouterLink :to="`/working-copies/${workingCopyId}/triage`">Start triage →</RouterLink>
-    </p>
   </section>
 </template>
-
-<style scoped>
-.next {
-  margin-top: 1.5rem;
-}
-</style>
