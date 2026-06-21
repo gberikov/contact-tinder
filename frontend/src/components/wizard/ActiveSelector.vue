@@ -3,15 +3,19 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { SelectorItem } from '@/components/wizard/types';
 import { cn } from '@/lib/utils';
-import { Check } from 'lucide-vue-next';
+import { Check, Trash2 } from 'lucide-vue-next';
 
 defineProps<{
   items: SelectorItem[];
   activeId: string | null;
   emptyText?: string;
+  deletable?: boolean;
 }>();
 
-const emit = defineEmits<(e: 'select', id: string) => void>();
+const emit = defineEmits<{
+  (e: 'select', id: string): void;
+  (e: 'delete', id: string): void;
+}>();
 </script>
 
 <template>
@@ -20,33 +24,44 @@ const emit = defineEmits<(e: 'select', id: string) => void>();
       {{ emptyText ?? 'Nothing here yet.' }}
     </p>
 
-    <button
-      v-for="item in items"
-      :key="item.id"
-      type="button"
-      :class="
-        cn(
-          'flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors hover:bg-accent/50',
-          item.id === activeId ? 'border-primary ring-1 ring-primary' : 'border-border',
-        )
-      "
-      @click="emit('select', item.id)"
-    >
-      <span class="min-w-0">
-        <span class="block truncate font-medium">{{ item.title }}</span>
-        <span v-if="item.subtitle" class="block truncate text-xs text-muted-foreground">
-          {{ item.subtitle }}
+    <div v-for="item in items" :key="item.id" class="flex items-center gap-2">
+      <button
+        type="button"
+        :class="
+          cn(
+            'flex min-w-0 flex-1 items-center justify-between rounded-lg border p-3 text-left transition-colors hover:bg-accent/50',
+            item.id === activeId ? 'border-primary ring-1 ring-primary' : 'border-border',
+          )
+        "
+        @click="emit('select', item.id)"
+      >
+        <span class="min-w-0">
+          <span class="block truncate font-medium">{{ item.title }}</span>
+          <span v-if="item.subtitle" class="block truncate text-xs text-muted-foreground">
+            {{ item.subtitle }}
+          </span>
         </span>
-      </span>
-      <span class="flex shrink-0 items-center gap-2">
-        <Badge v-if="item.status" :variant="item.statusVariant ?? 'secondary'">
-          {{ item.status }}
-        </Badge>
-        <Badge v-if="item.id === activeId" variant="default" class="gap-1">
-          <Check class="size-3" /> Active
-        </Badge>
-        <Button v-else variant="ghost" size="sm">Set active</Button>
-      </span>
-    </button>
+        <span class="flex shrink-0 items-center gap-2">
+          <Badge v-if="item.status" :variant="item.statusVariant ?? 'secondary'">
+            {{ item.status }}
+          </Badge>
+          <Badge v-if="item.id === activeId" variant="default" class="gap-1">
+            <Check class="size-3" /> Active
+          </Badge>
+          <span v-else class="text-xs text-muted-foreground">Set active</span>
+        </span>
+      </button>
+
+      <Button
+        v-if="deletable"
+        variant="ghost"
+        size="icon"
+        :aria-label="`Delete ${item.title}`"
+        class="shrink-0 text-muted-foreground hover:text-destructive"
+        @click="emit('delete', item.id)"
+      >
+        <Trash2 class="size-4" />
+      </Button>
+    </div>
   </div>
 </template>
