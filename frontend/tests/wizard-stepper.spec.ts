@@ -52,15 +52,17 @@ describe('wizard gating + navigation', () => {
     expect(store.available('connect')).toBe(true);
     expect(store.available('backup')).toBe(true);
     expect(store.available('merge')).toBe(false); // draft not done
-    // export: prereq is review; review is always passable (FR-A11), but merge is not done
-    // so export unavailability depends on merge not being done (merge → review → export chain)
-    // With only account set (no draft/merge): export available = passable('review') = true,
-    // but merge available = false (draft not done). Export prereq is review which is passable.
-    expect(store.available('export')).toBe(true); // review always passable (FR-A11)
+    // Export's prerequisite is Review, which is always passable (FR-A11), so Export is reachable
+    expect(store.available('export')).toBe(true);
   });
 
   it('refuses to navigate to an unavailable step but allows available ones (FR-004/006)', () => {
     const store = connectedThroughDraft();
+    // review is unavailable: its prereq merge is not passable (no dedupRun in this state)
+    expect(store.available('review')).toBe(false);
+    store.goToStep('review');
+    expect(store.currentStepKey).not.toBe('review'); // navigation refused
+
     store.goToStep('export'); // review always passable (FR-A11) → export now allowed
     expect(store.currentStepKey).toBe('export');
 
