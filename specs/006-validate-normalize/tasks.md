@@ -33,9 +33,10 @@ changed. Backend paths under `backend/`, frontend under `frontend/`.
 - [X] T001 Add runtime deps to `backend/pyproject.toml`: `phonenumbers`, `email-validator`
   (pulls `dnspython`), promote `httpx` from `[dev]` to runtime; add optional `geoip2` (note: GeoLite2
   DB is operator-supplied via `geoip_db_path`). Run `uv sync` / `pip install -e .`.
-- [X] T002 Add settings to `backend/src/core/config.py`: `phone_default_region="KZ"`,
-  `website_check_timeout_seconds=5.0`, `website_check_concurrency=8`, `website_check_max_redirects=5`,
-  `geoip_db_path=""` (per data-model.md Settings table).
+- [X] T002 Add settings to `backend/src/core/config.py`: `phone_default_region="KZ"` (server-side
+  **last-resort fallback** only — the surfaced default comes from `detect-region` + client locale per
+  FR-028/T045, not this value), `website_check_timeout_seconds=5.0`, `website_check_concurrency=8`,
+  `website_check_max_redirects=5`, `geoip_db_path=""` (per data-model.md Settings table).
 - [X] T003 [P] Confirm baselines before any feature work: `cd backend && pytest -m "not slow"` green and
   `cd frontend && npm run build` (`vue-tsc -b && vite build`) green.
 

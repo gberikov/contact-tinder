@@ -162,7 +162,8 @@ Python deps are not a constitutional amendment.
   auto-vs-queue decision table per field.
 - [contracts/validation-api.md](./contracts/validation-api.md) — HTTP contract for start-run,
   list-runs (newest-first, for wizard restore), get-run, list-items, resolve-item, skip-item, undo,
-  and detect-region; request/response shapes (incl. the derived `pendingCount`); error modes (incl.
+  and detect-region (served at `GET /api/settings/detect-region`, though implemented in
+  `validation.py`); request/response shapes (incl. the derived `pendingCount`); error modes (incl.
   the SSRF-unsafe and not-reachable issue types).
 - [quickstart.md](./quickstart.md) — install deps, run the migration, drive a Tidy run end-to-end
   over a seeded Draft, and verify auto-fixes, the queue, resolution/undo, passability, and the SSRF
