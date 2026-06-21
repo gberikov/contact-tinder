@@ -108,6 +108,24 @@ export const useWizardStore = defineStore('wizard', {
       const sid = this.activeSnapshotId;
       return state.workingCopies.filter((w) => w.snapshotId === sid);
     },
+
+    // ---- cascade-impact counts for the delete-confirmation warning -------------------------
+    snapshotCountForAccount(state) {
+      return (accountId: string): number =>
+        state.snapshots.filter((s) => s.accountId === accountId).length;
+    },
+    draftCountForAccount(state) {
+      return (accountId: string): number => {
+        const snapIds = new Set(
+          state.snapshots.filter((s) => s.accountId === accountId).map((s) => s.id),
+        );
+        return state.workingCopies.filter((w) => snapIds.has(w.snapshotId)).length;
+      };
+    },
+    draftCountForSnapshot(state) {
+      return (snapshotId: string): number =>
+        state.workingCopies.filter((w) => w.snapshotId === snapshotId).length;
+    },
     latestDedupRun(state): DedupRun | null {
       return state.dedupRuns.length ? state.dedupRuns[state.dedupRuns.length - 1] : null;
     },
@@ -293,6 +311,32 @@ export const useWizardStore = defineStore('wizard', {
     async loadExport() {
       const wid = this.activeWorkingCopyId;
       this.exportPreview = wid ? await api.previewExport(wid) : null;
+    },
+
+    // ---- destructive deletions (repair the persisted active chain, then re-hydrate) --------
+    async deleteAccount(id: string) {
+      await api.disconnect(id);
+      if (this.activeAccountId === id) this.activeAccountId = null;
+      delete this.snapshotByAccount[id];
+      this.persist();
+      await this.hydrate();
+    },
+    async removeSnapshot(id: string) {
+      await api.deleteSnapshot(id);
+      for (const [accountId, snapshotId] of Object.entries(this.snapshotByAccount)) {
+        if (snapshotId === id) delete this.snapshotByAccount[accountId];
+      }
+      delete this.workingCopyBySnapshot[id];
+      this.persist();
+      await this.hydrate();
+    },
+    async deleteDraft(id: string) {
+      await api.deleteWorkingCopy(id);
+      for (const [snapshotId, workingCopyId] of Object.entries(this.workingCopyBySnapshot)) {
+        if (workingCopyId === id) delete this.workingCopyBySnapshot[snapshotId];
+      }
+      this.persist();
+      await this.hydrate();
     },
 
     /** Load everything reachable along the current active-selection chain (FR-007/008). */
