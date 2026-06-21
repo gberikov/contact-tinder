@@ -4,8 +4,8 @@ Idempotent re-run stages nothing new; the snapshot is never touched.
 """
 from __future__ import annotations
 
+from src.models.audit import AuditEntry
 from src.models.triage import StagedEdit
-from src.models.validation import ValidationRun
 from src.services import validation_service
 from src.services.website_checker import WebsiteResult
 from tests.helpers import seed_account, seed_working_copy
@@ -56,6 +56,11 @@ def test_e164_mobile_type_and_https_upgrade(db):
     edits = db.query(StagedEdit).filter_by(kind="normalize").all()
     assert len(edits) >= 3
     assert all(e.status == "active" for e in edits)
+
+    # Principle V: every auto-fix is recorded in the audit trail.
+    audits = db.query(AuditEntry).filter_by(action="contact.normalized").all()
+    assert len(audits) >= 3
+    assert all(a.target_type == "working_copy_contact" for a in audits)
 
 
 def test_rerun_is_idempotent(db):

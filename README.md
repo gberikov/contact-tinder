@@ -41,6 +41,18 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 Never commit `.env`, tokens, or contact exports (Constitution Principle I; enforced by `.gitignore`).
 
+Optional **Tidy** (validate & normalize) knobs — all have safe defaults:
+
+```bash
+PHONE_DEFAULT_REGION=KZ              # fallback region for national-format phone parsing
+WEBSITE_CHECK_TIMEOUT_SECONDS=5.0    # per-request timeout for website reachability
+WEBSITE_CHECK_CONCURRENCY=8          # bounded outbound fan-out
+WEBSITE_CHECK_MAX_REDIRECTS=5        # redirect-hop cap (SSRF guard runs on every hop)
+GEOIP_DB_PATH=                       # optional local GeoLite2-Country DB for region detection
+```
+
+The Tidy worker runs inside the existing `worker` container (combined loop); no new service is needed.
+
 ## Run (docker-compose)
 
 ```bash
