@@ -49,7 +49,7 @@ def test_e164_mobile_type_and_https_upgrade(db):
     assert run.auto_applied_count >= 3  # e164 + mobile-type + https
 
     contacts = {c.payload["resourceName"]: c.payload for c in wc.contacts}
-    assert contacts["people/c0"]["phoneNumbers"][0]["value"] == "+77017221502"
+    assert contacts["people/c0"]["phoneNumbers"][0]["value"] == "+7 701 722 1502"
     assert contacts["people/c0"]["phoneNumbers"][0]["type"] == "mobile"
     assert contacts["people/c1"]["urls"][0]["value"] == "https://up.example/"
 
@@ -86,7 +86,7 @@ def test_list_auto_fixes_returns_before_after(db):
     _run(db, wc)
     fixes = validation_service.list_auto_fixes(db, wc.id)
     assert len(fixes) >= 1
-    e164 = next(f for f in fixes if f["fieldKind"] == "phone" and "+77017221502" in f["after"])
+    e164 = next(f for f in fixes if f["fieldKind"] == "phone" and "+7 701 722 1502" in f["after"])
     assert "+7 (701) 722-15-02" in e164["before"]
     assert e164["stagedEditId"] is not None
 

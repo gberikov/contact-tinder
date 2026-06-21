@@ -64,7 +64,7 @@ def test_each_issue_type_is_queued(db):
     }
     # unclear_type carries the E.164 suggestion.
     unclear = next(i for i in items if i.issue_type == "unclear_type")
-    assert unclear.suggested_value == "+77272501234"
+    assert unclear.suggested_value == "+7 7272 50 12 34"
 
 
 def test_resolve_set_type_creates_staged_edit(db):

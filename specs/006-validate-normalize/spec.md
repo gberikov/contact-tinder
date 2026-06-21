@@ -85,11 +85,12 @@ The new wizard becomes a **seven-step** flow:
   being interpreted as, and can change it. Numbers already in `+` international form are parsed by
   their own country code regardless of this setting.
 - Q: What counts as a website being "reachable" (and therefore when is an http→https upgrade
-  applied)? → A: **Any HTTP response from the server counts as reachable** — 2xx, 3xx, 4xx, and 5xx
-  alike (so antibot 403/429 and soft-404s are *not* treated as dead). Only **transport-level
-  failures** — DNS resolution failure, connection refused/unreachable, TLS handshake failure, or
-  timeout — count as *not reachable* and queue the website. An http→https upgrade is applied when an
-  `https://` request completes its TLS handshake and returns any HTTP response.
+  applied)? → A: A server response counts as reachable when it is present and serving — 2xx/3xx and
+  "present but blocked" codes (401/403/429). **Refinement (operator request): `404`/`410` ("page not
+  found / gone") and `5xx` ("server error") are flagged for review with the specific HTTP code**, not
+  treated as healthy. Transport-level failures — DNS not resolving, connection refused, TLS handshake
+  failure, or timeout — are flagged with their specific cause. An http→https upgrade applies when the
+  `https://` request returns a healthy response.
 - Q: How are website checks protected against SSRF (a contact URL pointing at an internal/private
   address)? → A: Tidy MUST **refuse to make requests to non-public targets** — loopback, RFC1918
   private ranges, link-local (incl. the cloud-metadata address `169.254.169.254`), and unique-local
@@ -259,9 +260,11 @@ hard block.
 
 - **FR-008**: Tidy MUST validate every phone number on a kept contact; a number that cannot be parsed
   as a valid phone number MUST be added to the manual queue as *invalid phone* and left unchanged.
-- **FR-009**: Tidy MUST normalize every *valid* phone number to its E.164 representation
-  (e.g. `+7 (701) 722-15-02` → `+77017221502`) as a reversible staged edit, applied only when the
-  normalized value differs from the stored value.
+- **FR-009**: Tidy MUST normalize every *valid* phone number to a consistent **human-readable
+  international** representation (e.g. `+7 (701) 722-15-02` → `+7 701 722 1502`) as a reversible staged
+  edit, applied only when the normalized value differs from the stored value. An internal/extension
+  number — whether marked (`ext`, `доб`, `#`, …) or a trailing digit group with no marker (e.g.
+  `+7 727 262 32 73 3230`) — MUST be preserved in the formatted value (e.g. `… ext. 3230`).
 - **FR-010**: When a kept contact's phone has no type, Tidy MUST set the type to *mobile*
   automatically **only** when the number is confidently classified as a mobile line; otherwise it
   MUST add an *unclear type* item to the manual queue offering an explicit type choice, and MUST NOT
@@ -366,8 +369,8 @@ hard block.
 ### Measurable Outcomes
 
 - **SC-001**: After a Tidy run, 100% of kept contacts' phone numbers **deemed valid for the active
-  parsing region** (FR-028) are stored in E.164 format. (Numbers invalid for the active region are
-  queued, not normalized.)
+  parsing region** (FR-028) are stored in a consistent human-readable international format. (Numbers
+  invalid for the active region are queued, not normalized.)
 - **SC-002**: Zero contacts are auto-modified for findings the system is not confident about — every
   invalid phone, unclear-type phone, bad-domain email, and unreachable website is queued, not silently
   changed.

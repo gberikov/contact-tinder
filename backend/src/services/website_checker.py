@@ -113,7 +113,14 @@ def _probe(url: str, *, timeout: float, max_redirects: int) -> tuple[str, str | 
                     return _REACHABLE, None  # redirect with no target = the server still answered
                 current = urljoin(current, location)
                 continue
-            return _REACHABLE, None  # any non-redirect HTTP response = reachable
+            # Final (non-redirect) response: 404/410 means the page/site is gone; 5xx is a server
+            # error. 401/403/429 and other codes mean the server is present (often antibot) → alive.
+            status = resp.status_code
+            if status in (404, 410):
+                return _UNREACHABLE, f"Page not found (HTTP {status})"
+            if 500 <= status < 600:
+                return _UNREACHABLE, f"Server error (HTTP {status})"
+            return _REACHABLE, None
     return _REACHABLE, None  # too many redirects, but the server is clearly answering
 
 

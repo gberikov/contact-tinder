@@ -62,6 +62,16 @@ def test_scheme_less_http_only_gets_http_scheme():
 
 
 @respx.mock
+def test_404_is_treated_as_not_found():
+    # Both https and http return 404 → the site/page is gone (distinct from antibot 403).
+    respx.get("https://gone.example/").mock(return_value=httpx.Response(404))
+    respx.get("http://gone.example/").mock(return_value=httpx.Response(404))
+    r = wc.check("http://gone.example/")
+    assert r.status == "unreachable"
+    assert "404" in (r.reason or "")
+
+
+@respx.mock
 def test_blocking_403_still_counts_as_reachable():
     # https answers 403 (antibot) → reachable; the http→https upgrade still applies.
     respx.get("https://example.com/").mock(return_value=httpx.Response(403))

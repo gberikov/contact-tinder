@@ -219,9 +219,9 @@ def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=Non
                            detail=f"Not a valid phone number for region {region}")
                     queued += 1
                     continue
-                if res.e164 and res.e164 != value:
+                if res.formatted and res.formatted != value:
                     np = deepcopy(contact.payload)
-                    np["phoneNumbers"][idx]["value"] = res.e164
+                    np["phoneNumbers"][idx]["value"] = res.formatted
                     _stage(session, contact, np, action="contact.normalized", kind="normalize")
                     auto += 1
                 if not entry.get("type"):
@@ -232,7 +232,7 @@ def run_validation_job(session: Session, run_id: uuid.UUID, *, website_check=Non
                         auto += 1
                     else:
                         _queue(session, run, contact, "phone", idx, "unclear_type", value,
-                               suggested=res.e164,
+                               suggested=res.formatted,
                                detail="Valid number, but its type (mobile/work/home) is ambiguous")
                         queued += 1
 

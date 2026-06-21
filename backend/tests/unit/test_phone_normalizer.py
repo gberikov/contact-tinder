@@ -4,9 +4,10 @@ from __future__ import annotations
 from src.services import phone_normalizer as pn
 
 
-def test_valid_national_kz_mobile_normalizes_to_e164_and_is_mobile():
+def test_valid_national_kz_mobile_normalizes_to_human_readable_and_is_mobile():
     r = pn.analyze("+7 (701) 722-15-02", "KZ")
     assert r.valid is True
+    assert r.formatted == "+7 701 722 1502"  # human-readable INTERNATIONAL form
     assert r.e164 == "+77017221502"
     assert r.is_mobile is True
 
@@ -14,7 +15,20 @@ def test_valid_national_kz_mobile_normalizes_to_e164_and_is_mobile():
 def test_national_format_without_plus_uses_region():
     r = pn.analyze("8 701 722 1502", "KZ")
     assert r.valid is True
-    assert r.e164 == "+77017221502"
+    assert r.formatted == "+7 701 722 1502"
+
+
+def test_trailing_internal_number_parsed_as_extension():
+    # "+7 727 262 32 73 3230" — the 3230 has no "ext" marker but is an internal/extension number.
+    r = pn.analyze("+7 727 262 32 73 3230", "KZ")
+    assert r.valid is True
+    assert "ext. 3230" in (r.formatted or "")
+
+
+def test_explicit_extension_marker_is_preserved():
+    r = pn.analyze("+7 727 262 32 73 ext 3230", "KZ")
+    assert r.valid is True
+    assert "ext. 3230" in (r.formatted or "")
 
 
 def test_e164_input_ignores_region():
