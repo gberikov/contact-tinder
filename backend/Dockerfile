@@ -9,7 +9,8 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir \
     "fastapi" "uvicorn[standard]" "sqlalchemy>=2.0" "alembic>=1.13" \
     "psycopg[binary]>=3.2" "pydantic>=2.7" "pydantic-settings>=2.3" "cryptography>=42.0" \
-    "google-api-python-client>=2.130" "google-auth-oauthlib>=1.2" "google-auth>=2.30"
+    "google-api-python-client>=2.130" "google-auth-oauthlib>=1.2" "google-auth>=2.30" \
+    "phonenumbers>=8.13" "email-validator>=2.1" "httpx>=0.27"
 
 COPY . .
 
