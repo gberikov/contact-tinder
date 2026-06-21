@@ -41,40 +41,41 @@ function onStepChange(index: number | undefined) {
       class="hidden items-start sm:flex"
       @update:model-value="onStepChange"
     >
-      <template v-for="(step, i) in WIZARD_STEPS" :key="step.key">
-        <StepperItem
-          :step="step.index"
-          :completed="wizard.completed(step.key)"
-          :disabled="!wizard.available(step.key)"
-          class="flex-col"
-          :data-running="wizard.running(step.key) ? '' : undefined"
-        >
-          <StepperTrigger :class="wizard.running(step.key) ? 'cursor-progress' : ''">
-            <StepperIndicator
-              :class="
-                wizard.running(step.key)
-                  ? 'border-running bg-running text-white animate-pulse'
-                  : ''
-              "
-            >
-              <Loader2 v-if="wizard.running(step.key)" class="size-4 animate-spin" />
-              <Check v-else-if="wizard.completed(step.key) && step.index !== currentStepIndex" class="size-4" />
-              <span v-else>{{ step.index }}</span>
-            </StepperIndicator>
-            <StepperTitle :class="step.index === currentStepIndex ? 'text-primary' : ''">
-              {{ step.label }}
-            </StepperTitle>
-            <StepperDescription class="hidden md:block">
-              {{ step.description }}
-            </StepperDescription>
-          </StepperTrigger>
-        </StepperItem>
+      <StepperItem
+        v-for="step in WIZARD_STEPS"
+        :key="step.key"
+        :step="step.index"
+        :completed="wizard.completed(step.key)"
+        :disabled="!wizard.available(step.key)"
+        class="relative flex-col"
+        :data-running="wizard.running(step.key) ? '' : undefined"
+      >
+        <!-- Connector to the next step — MUST sit inside StepperItem (reka-ui injects item context). -->
         <StepperSeparator
-          v-if="i < WIZARD_STEPS.length - 1"
-          :data-state="wizard.completed(step.key) ? 'completed' : 'inactive'"
-          class="mt-4"
+          v-if="step.index !== WIZARD_STEPS.length"
+          class="absolute left-[calc(50%+1.25rem)] right-[calc(-50%+1.25rem)] top-4 h-0.5"
         />
-      </template>
+        <StepperTrigger :class="wizard.running(step.key) ? 'cursor-progress' : ''">
+          <StepperIndicator
+            :class="
+              wizard.running(step.key) ? 'border-running bg-running text-white animate-pulse' : ''
+            "
+          >
+            <Loader2 v-if="wizard.running(step.key)" class="size-4 animate-spin" />
+            <Check
+              v-else-if="wizard.completed(step.key) && step.index !== currentStepIndex"
+              class="size-4"
+            />
+            <span v-else>{{ step.index }}</span>
+          </StepperIndicator>
+          <StepperTitle :class="step.index === currentStepIndex ? 'text-primary' : ''">
+            {{ step.label }}
+          </StepperTitle>
+          <StepperDescription class="hidden md:block">
+            {{ step.description }}
+          </StepperDescription>
+        </StepperTrigger>
+      </StepperItem>
     </Stepper>
   </nav>
 </template>
